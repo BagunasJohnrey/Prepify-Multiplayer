@@ -49,13 +49,14 @@ export default function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/about" element={<About />} />
             <Route path="/documentation" element={<Documentation />} />
+            <Route path="/multiplayer" element={<Multiplayer />} />
 
             {/* Protected Routes */}
             <Route element={<ProtectedRoute />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/quiz/:id" element={<Quiz />} />
               <Route path="/result" element={<Result />} />
-              <Route path="/multiplayer" element={<Multiplayer />} />
+              
             </Route>
 
             <Route path="*" element={<NotFound />} />
