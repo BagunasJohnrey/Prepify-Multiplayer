@@ -4,29 +4,27 @@ import { Server as SocketIOServer } from 'socket.io';
 import cors from "cors";
 import dotenv from "dotenv";
 import rateLimit from "express-rate-limit"; 
+import path from "path"; 
+import { fileURLToPath } from "url"; 
 import authRoutes from "./routes/authRoutes.js";
 import quizRoutes from "./routes/quizRoutes.js";
 import Quiz from "./models/Quiz.js"; 
-import path from "path"; //
-import { fileURLToPath } from "url"; //
 
 dotenv.config();
+
+// Helper to define __dirname in ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const httpServer = createServer(app);
 
-// Helper to define __dirname in ES Modules
-const __filename = fileURLToPath(import.meta.url); //
-const __dirname = path.dirname(__filename); //
-
 // CRITICAL FIX: Instruct Express to trust the proxy headers from Render/load balancer.
-// This resolves the ERR_ERL_UNEXPECTED_X_FORWARDED_FOR ValidationError.
-app.set('trust proxy', 1); //
+app.set('trust proxy', 1);
 
 const PORT = process.env.PORT || 3000;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173'; 
-// Define allowed origins for CORS (Render uses a single origin for a single deployment)
-const allowedOrigins = [CLIENT_URL, 'http://localhost:5173']; //
+const allowedOrigins = [CLIENT_URL, 'http://localhost:5173'];
 
 const QUESTION_TIME_MS = 10000; 
 const ANSWER_REVEAL_DELAY_MS = 3000; 
@@ -39,18 +37,13 @@ const io = new SocketIOServer(httpServer, {
     },
     pingTimeout: 20000, 
     pingInterval: 5000,
-    path: '/socket.io/' // ADDED: Explicitly set the path on the server
+    path: '/socket.io/' 
 });
 
-// ----------------------------------------------------
-// FIX 1: Explicit Socket.IO Polling/Health Check Route
-// This ensures Express doesn't 404 the initial polling request
-// during the handshake on Vercel/Render.
+// Explicit Socket.IO Polling/Health Check Route
 app.get('/socket.io/', (req, res) => {
-    res.status(200).send('Socket.IO health check successful.'); //
+    res.status(200).send('Socket.IO health check successful.');
 });
-// ----------------------------------------------------
-
 
 // Express CORS setup
 app.use(cors({
@@ -74,12 +67,8 @@ app.use("/api/generate", generateLimiter);
 
 app.use(express.json());
 
-// ----------------------------------------------------
-// FIX 2: Serve Static Files
-// This tells Express to serve the built React files (CSS, JS, Images)
-// from the client/dist directory.
+// Serve Static Frontend Files
 app.use(express.static(path.join(__dirname, "../client/dist")));
-// ----------------------------------------------------
 
 app.use("/api/auth", authRoutes); 
 app.use("/api", quizRoutes);      
@@ -187,7 +176,6 @@ const advanceGame = (roomCode, roomState) => {
 io.on('connection', (socket) => {
     console.log('A user connected via socket:', socket.id);
 
-    // 1. Create Room 
     socket.on('createRoom', (data) => {
         const { username, quizId } = data;
         const roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -205,11 +193,9 @@ io.on('connection', (socket) => {
         };
         rooms.set(roomCode, roomState);
 
-        // FIX: Send update directly to the host (creator) as confirmation
         socket.emit('lobbyUpdate', roomState); 
     });
 
-    // 2. Join Room
     socket.on('joinRoom', (data) => {
         const { roomCode, username } = data;
         const roomState = rooms.get(roomCode);
@@ -227,14 +213,10 @@ io.on('connection', (socket) => {
         socket.join(roomCode);
         roomState.players.push({ username, id: socket.id, score: 0, answers: [], lastScore: 0, socketId: socket.id });
 
-        // CRITICAL FIX: Send the update directly to the joining socket (player) 
         socket.emit('lobbyUpdate', roomState);
-        
-        // Broadcast the update to all other members (the host) so they see the new player.
         socket.to(roomCode).emit('lobbyUpdate', roomState); 
     });
 
-    // 3. Start Game
     socket.on('startGame', async (data) => {
         const { roomCode, quizId } = data;
         const roomState = rooms.get(roomCode);
@@ -272,7 +254,6 @@ io.on('connection', (socket) => {
                 quizData: roomState.quizData
             });
 
-            // Set up a timer to send the first question after countdown
             setTimeout(() => {
                 const currentRoomState = rooms.get(roomCode);
                 if (!currentRoomState) return;
@@ -294,12 +275,11 @@ io.on('connection', (socket) => {
             }, 5000); 
             
         } catch (error) {
-            console.error('Fatal Error fetching quiz data or processing JSON:', error);
+            console.error('Fatal Error fetching quiz data:', error);
             io.to(roomCode).emit('roomError', 'Internal server error starting game.');
         }
     });
 
-    // 4. Submit Answer
     socket.on('submitAnswer', (data) => {
         const { selected, time_ms, roomCode } = data;
         const roomState = rooms.get(roomCode);
@@ -328,7 +308,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 5. Disconnect
     socket.on('disconnect', () => {
         const roomInfo = findRoomBySocketId(socket.id);
 
@@ -353,12 +332,11 @@ io.on('connection', (socket) => {
 });
 
 // ----------------------------------------------------
-// FIX 3: SPA Fallback Route
-// This wildcard route must be placed AFTER all other API/Socket routes.
-// It serves index.html for any request that doesn't match an API endpoint,
-// effectively fixing the "404 Not Found" on page refresh.
-app.get('*', (req, res) => {
-    // Safety check: ensure we don't accidentally intercept API calls if they fall through
+// FIX 3: SPA Fallback Route (Express 5 Compatible)
+// Replaced '*' with '(.*)' to fix "Missing parameter name" error.
+// This matches any route not previously handled and serves index.html.
+app.get('(.*)', (req, res) => {
+    // Safety check: ensure we don't accidentally intercept API calls
     if (req.originalUrl.startsWith('/api')) {
         return res.status(404).json({ error: "API endpoint not found" });
     }
@@ -376,7 +354,6 @@ function selfPing() {
         return;
     }
     
-    // Ping a lightweight endpoint to keep the server alive
     fetch(PING_URL + '/api/quizzes', { 
         headers: { 'User-Agent': 'Render-Self-Pinger' }
     })
@@ -388,12 +365,10 @@ function selfPing() {
         });
 }
 
-
-// CRITICAL RENDER FIX: Bind to '0.0.0.0' and the PORT env variable
+// Bind to '0.0.0.0' and the PORT env variable
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Prepify Server running on port ${PORT}`);
 
-  // START SELF-PING ONLY IF A PUBLIC HOSTNAME IS AVAILABLE
   if (RENDER_HOSTNAME !== 'localhost' && RENDER_HOSTNAME !== undefined) {
       console.log(`Self-ping scheduled every ${PING_INTERVAL / 60000} minutes to ${PING_URL}`);
       setInterval(selfPing, PING_INTERVAL);
