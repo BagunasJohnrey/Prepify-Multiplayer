@@ -13,7 +13,7 @@ const API_BASE_URL = API_BASE_URL_RAW.endsWith('/')
     : API_BASE_URL_RAW;
 
 const socket = io(API_BASE_URL, {
-    path: '/socket.io/', // This explicit path is still required for Socket.IO on the server root
+    // path: '/socket.io/', // REMOVED: This is now handled by explicit configuration in server/server.js and Vercel routing
     
     // Prioritize native WebSockets on Render, fallback to polling
     transports: ['websocket', 'polling'], 

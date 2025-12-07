@@ -32,7 +32,8 @@ const io = new SocketIOServer(httpServer, {
         methods: ["GET", "POST"]
     },
     pingTimeout: 20000, 
-    pingInterval: 5000 
+    pingInterval: 5000, 
+    path: '/socket.io/' // ADDED: Explicitly set the path on the server
 });
 
 // Express CORS setup
