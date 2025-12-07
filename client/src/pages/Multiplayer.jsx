@@ -608,16 +608,18 @@ export default function Multiplayer() {
                     </div>
 
                     {/* Invite Section */}
-                    <div className="bg-black/30 p-5 rounded-3xl border border-white/5 flex flex-col items-center justify-between text-center h-[380px]">
-                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 w-full justify-center border-b border-white/5 pb-4">
+                    <div className="bg-black/30 p-5 rounded-3xl border border-white/5 flex flex-col items-center h-[380px]">
+                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 w-full justify-center border-b border-white/5 pb-4 shrink-0">
                             <Share2 size={16} /> Scan to Join
                         </h3>
                         
-                        <div className="p-3 bg-white rounded-2xl shadow-xl">
-                             <QRCodeSVG value={inviteLink} size={140} level={"H"} />
+                        <div className="flex-1 flex items-center justify-center py-2">
+                            <div className="p-4 bg-white rounded-2xl shadow-xl">
+                                <QRCodeSVG value={inviteLink} size={140} level={"H"} />
+                            </div>
                         </div>
                         
-                        <div className="w-full space-y-3 mt-auto">
+                        <div className="w-full space-y-3 shrink-0">
                             <div className="flex items-center gap-2 bg-gray-900 p-1.5 pr-3 rounded-xl border border-gray-700 group hover:border-neon-blue transition-colors">
                                 <div className="bg-gray-800 px-4 py-2 rounded-lg text-neon-green font-mono font-bold text-2xl tracking-widest border border-gray-700 shadow-inner">
                                     {lobbyData.roomCode}
