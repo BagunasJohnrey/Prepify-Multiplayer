@@ -13,8 +13,12 @@ dotenv.config();
 const app = express();
 const httpServer = createServer(app);
 
+// CRITICAL FIX: Instruct Express to trust the proxy headers from Render/load balancer.
+// This resolves the ERR_ERL_UNEXPECTED_X_FORWARDED_FOR ValidationError.
+app.set('trust proxy', 1);
+
 const PORT = process.env.PORT || 3000;
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173'; // Fallback for local testing
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173'; 
 // Define allowed origins for CORS (Render uses a single origin for a single deployment)
 const allowedOrigins = [CLIENT_URL, 'http://localhost:5173'];
 
@@ -159,7 +163,7 @@ const advanceGame = (roomCode, roomState) => {
 io.on('connection', (socket) => {
     console.log('A user connected via socket:', socket.id);
 
-    // 1. Create Room (FIXED)
+    // 1. Create Room 
     socket.on('createRoom', (data) => {
         const { username, quizId } = data;
         const roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -181,7 +185,7 @@ io.on('connection', (socket) => {
         socket.emit('lobbyUpdate', roomState); 
     });
 
-    // 2. Join Room (FIXED)
+    // 2. Join Room
     socket.on('joinRoom', (data) => {
         const { roomCode, username } = data;
         const roomState = rooms.get(roomCode);
@@ -200,11 +204,9 @@ io.on('connection', (socket) => {
         roomState.players.push({ username, id: socket.id, score: 0, answers: [], lastScore: 0, socketId: socket.id });
 
         // CRITICAL FIX: Send the update directly to the joining socket (player) 
-        // to guarantee they transition out of the 'loading' view immediately.
         socket.emit('lobbyUpdate', roomState);
         
         // Broadcast the update to all other members (the host) so they see the new player.
-        // socket.to(roomCode) ensures the sender does not receive the update again.
         socket.to(roomCode).emit('lobbyUpdate', roomState); 
     });
 
