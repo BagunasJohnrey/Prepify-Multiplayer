@@ -32,9 +32,19 @@ const io = new SocketIOServer(httpServer, {
         methods: ["GET", "POST"]
     },
     pingTimeout: 20000, 
-    pingInterval: 5000, 
+    pingInterval: 5000,
     path: '/socket.io/' // ADDED: Explicitly set the path on the server
 });
+
+// ----------------------------------------------------
+// FIX 1: Explicit Socket.IO Health Check/Handshake Route
+// This ensures Vercel/Express doesn't 404 the initial polling request
+// before the upgrade happens.
+app.get('/socket.io/', (req, res) => {
+    res.status(200).send('Socket.IO health check successful.');
+});
+// ----------------------------------------------------
+
 
 // Express CORS setup
 app.use(cors({

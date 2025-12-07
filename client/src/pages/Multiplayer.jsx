@@ -250,7 +250,7 @@ export default function Multiplayer() {
             if (countdownInterval) clearInterval(countdownInterval);
             stopQuestionTimer();
         };
-    }, [availableQuizzes, currentQIndex, user.username, view]); 
+    }, [availableQuizzes, currentQIndex, user.username, view, lobbyData, roomCode]); 
     // --- End Socket Listeners Setup ---
 
 
