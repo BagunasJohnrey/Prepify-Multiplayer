@@ -68,7 +68,10 @@ app.use("/api/generate", generateLimiter);
 app.use(express.json());
 
 // Serve Static Frontend Files
-app.use(express.static(path.join(__dirname, "../client/dist")));
+// MOVED: We now serve static files explicitly using express.static before the API routes or alongside them
+// This line below was in your original code, keep it here or merge with the fix below.
+// For clarity, I will rely on the robust static serving in the fix section at the bottom.
+// app.use(express.static(path.join(__dirname, "../client/dist"))); 
 
 app.use("/api/auth", authRoutes); 
 app.use("/api", quizRoutes);      
@@ -331,29 +334,31 @@ io.on('connection', (socket) => {
     });
 });
 
-// SPA Fallback Route (Express 5 Compatible)
-// IMPORTANT: This must be the LAST route defined
-// Catches all GET requests that haven't matched any other routes
-app.use((req, res, next) => {
-    // Only handle GET requests for HTML
-    if (req.method !== 'GET') {
-        return next();
-    }
-    
-    // Don't intercept API or Socket.IO routes
+// ==========================================
+// SPA ROUTING FIX (UPDATED SECTION)
+// ==========================================
+
+// 1. Serve Static Assets (JS, CSS, Images)
+// This ensures that physical files are served immediately.
+app.use(express.static(path.join(__dirname, "../client/dist")));
+
+// 2. SPA Fallback (Wildcard Route)
+// This catches any GET request that wasn't an API call, Socket call, or Static File.
+// It serves index.html so React Router can take over.
+app.get('*', (req, res) => {
+    // Safety check: If the browser is asking for an API/Socket route that doesn't exist,
+    // return a JSON 404 instead of the HTML page.
     if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
-        return next();
+        return res.status(404).json({ error: 'API route not found' });
     }
-    
-    const indexPath = path.join(__dirname, '../client/dist/index.html');
-    
-    res.sendFile(indexPath, (err) => {
-        if (err) {
-            console.error("Error serving index.html:", err);
-            res.status(500).send('Error: Client build not found. Please run "npm run build" in the client directory.');
-        }
-    });
+
+    // Serve the React Entry Point
+    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });
+
+// ==========================================
+// END FIX
+// ==========================================
 
 // Self-ping function to keep Render instance awake
 const RENDER_HOSTNAME = process.env.RENDER_EXTERNAL_HOSTNAME || 'localhost';
