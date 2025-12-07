@@ -18,7 +18,7 @@ export default function Multiplayer() {
     const [roomCode, setRoomCode] = useState('');
     const [lobbyData, setLobbyData] = useState(null); 
     const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
-    const [isConnected, setIsConnected] = useState(false); 
+    const [isConnected, setIsConnected] = useState(socket.connected); // Initialize with current state
     const [isRoomActionPending, setIsRoomActionPending] = useState(false); 
     
     // Game State
@@ -107,6 +107,11 @@ export default function Multiplayer() {
     useEffect(() => {
         let countdownInterval;
 
+        // FIX: Check connection immediately on mount
+        if (socket.connected) {
+            setIsConnected(true);
+        }
+
         // --- Connection/Disconnection Listeners ---
         const onConnect = () => {
             setIsConnected(true);
@@ -154,7 +159,7 @@ export default function Multiplayer() {
         
         const handlePlayerAnswered = (data) => {
             if (data.qIndex === currentQIndex) {
-                 toast(`${data.username} submitted an answer!`, { icon: '👏' });
+                 toast(`${data.username} submitted an answer!`, { icon: '聡' });
             }
         };
 
@@ -230,7 +235,7 @@ export default function Multiplayer() {
 
         // Attach listeners
         socket.on('lobbyUpdate', handleLobbyUpdate); 
-        socket.on('playerJoined', (data) => toast(`🚪 ${data.username} joined the lobby!`, { icon: '👋' })); 
+        socket.on('playerJoined', (data) => toast(`坎 ${data.username} joined the lobby!`, { icon: '窓' })); 
         socket.on('playerAnswered', handlePlayerAnswered); 
         socket.on('startCountdown', handleStartCountdown); 
         socket.on('showAnswer', handleShowAnswer); 

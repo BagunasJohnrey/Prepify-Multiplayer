@@ -11,26 +11,18 @@
       "config": { "distDir": "dist" }
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/socket.io/.*", 
-      "dest": "/server/server.js"
+      "source": "/socket.io/(.*)", 
+      "destination": "/server/server.js"
     },
     {
-      "src": "/api/(.*)",
-      "dest": "/server/server.js"
+      "source": "/api/(.*)",
+      "destination": "/server/server.js"
     },
     {
-      "src": "/assets/(.*)",
-      "dest": "/client/assets/$1"
-    },
-    {
-      "src": "/(.*)\\.(ico|png|svg|jpg|jpeg|css|js)",
-      "dest": "/client/$1.$2"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/client/index.html"
+      "source": "/(.*)",
+      "destination": "/client/index.html"
     }
   ]
 }
