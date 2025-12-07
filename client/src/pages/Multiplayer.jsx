@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'; 
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Users, PlusCircle, LogIn, Loader, Clock, Trophy, Zap, AlertCircle, CheckCircle, XCircle, Copy, Link as LinkIcon, Share2, User, KeyRound, ArrowRight, UserPlus, ArrowLeft } from 'lucide-react';
+import { Users, PlusCircle, LogIn, Loader, Clock, Trophy, Zap, AlertCircle, CheckCircle, XCircle, Copy, Link as LinkIcon, Share2, User, KeyRound, ArrowRight, UserPlus, ArrowLeft, Gamepad2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -79,20 +79,17 @@ export default function Multiplayer() {
         };
     }, [availableQuizzes, currentQIndex, user, guestName, isGuestSetup, view, lobbyData, roomCode]);
 
-    // --- ACTIONS (Moved up for useEffect dependencies) ---
+    // --- ACTIONS ---
     
-    // Completely resets state and removes URL parameters
     const handleCancel = useCallback(() => {
         setIsRoomActionPending(false);
         setRoomCode(''); 
         setView('menu');
         toast.dismiss();
-        
-        // CRITICAL FIX: Remove ?code=... from URL so useEffect doesn't trigger again
         navigate('/multiplayer', { replace: true });
     }, [navigate]);
 
-    // --- AUTH & INITIALIZATION LOGIC ---
+    // --- AUTH & INITIALIZATION ---
     useEffect(() => {
         if (authLoading) return;
 
@@ -107,22 +104,15 @@ export default function Multiplayer() {
         }
     }, [user, authLoading, isGuestSetup, view]);
 
-    // --- Handle URL Params (Join Link) ---
     useEffect(() => {
         const searchParams = new URLSearchParams(location.search);
         const codeParam = searchParams.get('code');
         
-        // Only act if there is a code param
         if (codeParam) {
             const cleanCode = codeParam.toUpperCase();
-            
-            // Only update state if it's different to prevent loops
             if (cleanCode !== roomCode) {
                 setRoomCode(cleanCode);
             }
-
-            // Only switch to JOIN view if we are fully authenticated (Guest or User)
-            // AND we are currently in the menu. 
             if (currentUsername && view === 'menu') {
                 setView('join');
                 toast.success('Room code found! Click Enter to join.', { icon: '🔗', id: 'join-toast' });
@@ -159,7 +149,7 @@ export default function Multiplayer() {
         if (view === 'loading' && isRoomActionPending) {
             roomActionTimeoutRef.current = setTimeout(() => {
                 toast.error("Request timed out.", { duration: 4000 });
-                handleCancel(); // Use handleCancel to cleanup
+                handleCancel(); 
             }, 10000); 
         } else {
             if (roomActionTimeoutRef.current) clearTimeout(roomActionTimeoutRef.current);
@@ -206,7 +196,6 @@ export default function Multiplayer() {
             const quiz = availableQuizzes.find(q => String(q.id) === String(data.quizId));
             const quizTitle = quiz ? quiz.title : 'Unknown Quiz';
             
-            // Clean URL on successful join so refresh doesn't re-trigger join logic
             navigate('/multiplayer', { replace: true });
 
             setLobbyData({
@@ -288,8 +277,6 @@ export default function Multiplayer() {
         const handleRoomError = (message) => {
             setIsRoomActionPending(false); 
             toast.error(message, { duration: 3000 });
-            
-            // If we are stuck in loading, go back to menu AND clear URL
             if (stateRef.current.view === 'loading') {
                 handleCancel();
             }
@@ -320,7 +307,7 @@ export default function Multiplayer() {
         };
     }, [handleCancel, navigate]);
 
-    // --- Other Actions ---
+    // --- OTHER ACTIONS ---
 
     const handleGuestEntry = (e) => {
         e.preventDefault();
@@ -372,7 +359,7 @@ export default function Multiplayer() {
             socket.emit('leaveRoom', { roomCode: lobbyData.roomCode });
         }
         setLobbyData(null);
-        handleCancel(); // Use handleCancel to ensure URL is also cleaned
+        handleCancel();
     };
 
     const copyToClipboard = (text, field) => {
@@ -385,37 +372,34 @@ export default function Multiplayer() {
     // --- RENDERERS ---
 
     const renderGuestEntry = () => (
-        <div className="flex flex-col items-center justify-center space-y-8 animate-fade-in text-center">
+        <div className="flex flex-col items-center justify-center space-y-8 animate-fade-in text-center max-w-sm mx-auto w-full">
             <div className="mb-4">
-                <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-neon-blue shadow-[0_0_20px_rgba(37,99,235,0.3)]">
+                <div className="w-20 h-20 bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-neon-blue shadow-[0_0_30px_rgba(37,99,235,0.3)] animate-pulse-slow">
                     <UserPlus size={40} className="text-neon-blue" />
                 </div>
-                <h2 className="text-4xl font-black text-white mb-3">Welcome to Arena</h2>
-                <p className="text-gray-400 text-lg">Choose how you want to play today.</p>
+                <h2 className="text-4xl font-black text-white mb-2">Identify Yourself</h2>
+                <p className="text-gray-400 text-sm">Enter a temporary nickname to join the arena.</p>
             </div>
 
-            <div className="w-full max-w-sm space-y-8">
-                <div className="space-y-4">
-                    <form onSubmit={handleGuestEntry} className="space-y-3">
-                        <Input 
-                            label="Play as Guest"
-                            placeholder="Enter a nickname..." 
-                            value={guestName} 
-                            onChange={(e) => setGuestName(e.target.value)} 
-                            className="text-center h-12 text-lg bg-gray-900 border-gray-700 focus:border-neon-blue"
-                        />
-                        <Button type="submit" variant="primary" className="w-full h-12 text-lg font-bold shadow-lg shadow-blue-500/20">
-                            Continue as Guest <ArrowRight size={18} className="ml-2" />
-                        </Button>
-                    </form>
+            <div className="w-full space-y-6">
+                <form onSubmit={handleGuestEntry} className="space-y-4">
+                    <Input 
+                        placeholder="e.g. Maverick" 
+                        value={guestName} 
+                        onChange={(e) => setGuestName(e.target.value)} 
+                        className="text-center h-14 text-lg bg-gray-900/50 border-gray-700 focus:border-neon-blue font-bold tracking-wide"
+                    />
+                    <Button type="submit" variant="primary" className="w-full h-14 text-lg font-bold shadow-lg shadow-blue-500/20">
+                        Continue as Guest <ArrowRight size={18} className="ml-2" />
+                    </Button>
+                </form>
+
+                <div className="relative py-2">
+                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-800"></div></div>
+                    <div className="relative flex justify-center text-xs"><span className="px-4 bg-[#1a1a2e] text-gray-500 font-bold tracking-widest uppercase">Member Access</span></div>
                 </div>
 
-                <div className="relative">
-                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-700"></div></div>
-                    <div className="relative flex justify-center text-sm"><span className="px-4 bg-dark-surface text-gray-500 font-bold tracking-wider">OR</span></div>
-                </div>
-
-                <Button onClick={() => navigate('/')} variant="outline" className="w-full h-12 border-gray-600 hover:bg-gray-800 text-gray-300">
+                <Button onClick={() => navigate('/')} variant="outline" className="w-full h-12 border-gray-700 hover:bg-gray-800 hover:text-white text-gray-400">
                     <LogIn size={18} className="mr-2" /> Login / Register
                 </Button>
             </div>
@@ -424,105 +408,164 @@ export default function Multiplayer() {
 
     const renderMenu = () => (
         <div className="space-y-8 animate-fade-in">
-            <div className="flex justify-between items-center pb-6 border-b border-gray-800">
-                <h2 className="text-3xl font-black text-white">Multiplayer Arena</h2>
-                <div className="flex items-center gap-2 bg-gray-800 px-4 py-2 rounded-full border border-gray-700 shadow-sm">
-                    <User size={18} className="text-neon-blue" />
+            {/* Header */}
+            <div className="flex flex-col md:flex-row justify-between items-center gap-4 pb-6 border-b border-gray-800/50">
+                <div>
+                    <h2 className="text-3xl font-black text-white flex items-center gap-3">
+                        <Gamepad2 className="text-neon-purple" size={32} /> Multiplayer Arena
+                    </h2>
+                    <p className="text-gray-400 text-sm mt-1">Challenge friends in real-time battles.</p>
+                </div>
+                <div className="flex items-center gap-3 bg-black/30 px-5 py-2.5 rounded-full border border-gray-700/50 backdrop-blur-sm">
+                    <div className="w-2 h-2 rounded-full bg-neon-green animate-pulse"></div>
                     <span className="text-sm font-bold text-white tracking-wide">{currentUsername}</span>
                 </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Button 
-                    onClick={() => setView('create')} 
-                    className="group relative flex flex-col items-center justify-center h-48 space-y-4 bg-linear-to-br from-blue-900/40 to-purple-900/40 border border-blue-500/30 hover:border-blue-400 rounded-3xl overflow-hidden transition-all hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(59,130,246,0.3)]"
-                    disabled={isRoomActionPending || quizzesLoading || availableQuizzes.length === 0 || !isConnected}
-                >
-                    <div className="absolute inset-0 bg-blue-600/10 group-hover:bg-blue-600/20 transition-all"></div>
-                    <div className="bg-blue-600 p-4 rounded-full shadow-lg shadow-blue-500/40 group-hover:scale-110 transition-transform">
-                        <PlusCircle size={32} className="text-white" />
-                    </div>
-                    <div className="text-center z-10">
-                        <span className="block text-2xl font-black text-white mb-1">Create Room</span>
-                        <span className="block text-sm text-blue-200 font-medium">Host a game for friends</span>
-                    </div>
-                </Button>
+            {/* Action Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
-                <Button 
-                    onClick={() => setView('join')} 
-                    className="group relative flex flex-col items-center justify-center h-48 space-y-4 bg-linear-to-br from-gray-900 to-gray-800 border border-gray-700 hover:border-neon-green rounded-3xl overflow-hidden transition-all hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(34,197,94,0.15)]"
-                    disabled={isRoomActionPending || !isConnected}
+                {/* Create Room Card */}
+                <button 
+                    onClick={() => setView('create')} 
+                    disabled={isRoomActionPending || quizzesLoading || availableQuizzes.length === 0 || !isConnected}
+                    className="group relative h-64 rounded-3xl overflow-hidden text-left border border-white/5 bg-gray-900/40 hover:bg-gray-800/60 transition-all duration-300 hover:border-neon-blue/50 hover:shadow-[0_0_30px_rgba(0,243,255,0.1)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                    <div className="absolute inset-0 bg-green-500/5 group-hover:bg-green-500/10 transition-all"></div>
-                    <div className="bg-gray-800 border border-gray-600 group-hover:border-neon-green p-4 rounded-full shadow-lg group-hover:scale-110 transition-transform">
-                        <LogIn size={32} className="text-neon-green" />
+                    <div className="absolute inset-0 bg-gradient-to-br from-neon-blue/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                    
+                    <div className="absolute top-6 left-6 bg-gray-800/80 p-4 rounded-2xl border border-white/10 text-neon-blue shadow-lg group-hover:scale-110 transition-transform duration-300">
+                        <PlusCircle size={32} />
                     </div>
-                    <div className="text-center z-10">
-                        <span className="block text-2xl font-black text-white mb-1">Join Room</span>
-                        <span className="block text-sm text-gray-400 font-medium group-hover:text-gray-300">Enter a code to play</span>
+
+                    <div className="absolute bottom-6 left-6 right-6">
+                        <h3 className="text-2xl font-black text-white mb-2 group-hover:text-neon-blue transition-colors">Create Room</h3>
+                        <p className="text-sm text-gray-400 font-medium leading-relaxed">Host a new game session. Select your quiz material and invite others to join via code.</p>
                     </div>
-                </Button>
+                    
+                    <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0">
+                        <ArrowRight className="text-gray-500" />
+                    </div>
+                </button>
+                
+                {/* Join Room Card */}
+                <button 
+                    onClick={() => setView('join')} 
+                    disabled={isRoomActionPending || !isConnected}
+                    className="group relative h-64 rounded-3xl overflow-hidden text-left border border-white/5 bg-gray-900/40 hover:bg-gray-800/60 transition-all duration-300 hover:border-neon-green/50 hover:shadow-[0_0_30px_rgba(57,255,20,0.1)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    <div className="absolute inset-0 bg-gradient-to-br from-neon-green/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                    
+                    <div className="absolute top-6 left-6 bg-gray-800/80 p-4 rounded-2xl border border-white/10 text-neon-green shadow-lg group-hover:scale-110 transition-transform duration-300">
+                        <LogIn size={32} />
+                    </div>
+
+                    <div className="absolute bottom-6 left-6 right-6">
+                        <h3 className="text-2xl font-black text-white mb-2 group-hover:text-neon-green transition-colors">Join Room</h3>
+                        <p className="text-sm text-gray-400 font-medium leading-relaxed">Enter an existing 4-digit room code to jump into a lobby instantly.</p>
+                    </div>
+
+                    <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0">
+                        <ArrowRight className="text-gray-500" />
+                    </div>
+                </button>
             </div>
-            {!isConnected && <div className="text-center text-red-500 animate-pulse font-mono text-sm mt-4">● Connecting to server...</div>}
+
+            {!isConnected && (
+                <div className="flex items-center justify-center gap-2 text-red-500 bg-red-500/10 py-3 rounded-xl border border-red-500/20">
+                    <AlertCircle size={16} />
+                    <span className="text-xs font-bold uppercase tracking-wide">Disconnected from Server</span>
+                </div>
+            )}
         </div>
     );
 
     const renderJoinRoom = () => (
-        <form onSubmit={handleJoinRoom} className="space-y-8 animate-fade-in text-center max-w-sm mx-auto">
-            <div className="mb-8">
-                <div className="w-16 h-16 bg-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-700 shadow-xl">
+        <form onSubmit={handleJoinRoom} className="flex flex-col h-full justify-between animate-fade-in">
+            <div className="text-center space-y-2 mt-4">
+                <div className="inline-flex items-center justify-center p-4 bg-gray-800/50 rounded-2xl border border-gray-700/50 mb-4 shadow-xl">
                     <KeyRound size={32} className="text-neon-green" />
                 </div>
-                <h2 className="text-3xl font-black text-white">Join Game</h2>
-                <p className="text-gray-400">Enter the 4-character code below.</p>
+                <h2 className="text-3xl font-black text-white">Enter Access Code</h2>
+                <p className="text-gray-400 text-sm">Ask the host for the 4-character ID.</p>
             </div>
 
-            <div className="relative group">
-                <div className="absolute inset-0 bg-neon-green/20 blur-xl rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500"></div>
-                <Input 
-                    type="text" 
-                    placeholder="CODE" 
-                    value={roomCode} 
-                    onChange={e => setRoomCode(e.target.value.toUpperCase())} 
-                    maxLength={4} 
-                    className="relative text-center text-5xl font-mono font-black uppercase tracking-[0.3em] h-24 bg-gray-900/90 border-2 border-gray-700 focus:border-neon-green rounded-2xl placeholder-gray-800 text-white shadow-2xl transition-all"
-                />
+            <div className="flex-1 flex items-center justify-center py-8">
+                <div className="relative group w-full max-w-xs mx-auto">
+                    {/* Glow effect behind input */}
+                    <div className="absolute inset-0 bg-neon-green/20 blur-xl rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500"></div>
+                    
+                    <input 
+                        type="text" 
+                        placeholder="____" 
+                        value={roomCode} 
+                        onChange={e => setRoomCode(e.target.value.toUpperCase())} 
+                        maxLength={4} 
+                        className="relative w-full text-center text-5xl font-mono font-bold uppercase tracking-[0.5em] py-6 bg-black/60 border-2 border-gray-700 rounded-2xl text-white focus:border-neon-green focus:outline-none focus:bg-black/80 transition-all placeholder-gray-800 shadow-2xl"
+                    />
+                </div>
             </div>
 
-            <div className="space-y-3 pt-6">
-                <Button type="submit" variant="primary" className="w-full h-14 text-lg font-bold bg-neon-green hover:bg-green-500 text-black shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all hover:scale-[1.02]" disabled={isRoomActionPending || roomCode.length !== 4}>
-                    Enter Room <ArrowRight className="ml-2" />
+            <div className="grid grid-cols-2 gap-4">
+                <Button type="button" onClick={handleCancel} variant="outline" className="border-gray-700 text-gray-400 hover:text-white hover:bg-gray-800 h-14">
+                    Cancel
                 </Button>
-                <Button type="button" onClick={handleCancel} variant="ghost" className="w-full text-gray-500 hover:text-white" disabled={false}>
-                    <ArrowLeft size={16} className="mr-2" /> Cancel
+                <Button type="submit" variant="primary" className="bg-neon-green hover:bg-green-500 text-black font-bold h-14 shadow-[0_0_20px_rgba(34,197,94,0.2)]" disabled={isRoomActionPending || roomCode.length !== 4}>
+                    Join Lobby
                 </Button>
             </div>
         </form>
     );
 
     const renderCreateRoom = () => (
-        <form onSubmit={handleCreateRoom} className="space-y-6 animate-fade-in">
-            <h2 className="text-3xl font-black text-neon-blue mb-6">Setup Game</h2>
-            <p className="text-gray-400">Select the quiz material for your battle.</p>
-            {quizzesLoading ? <div className="text-center text-neon-blue">Loading Quizzes...</div> : (
-                <>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Quiz Material</label>
-                    <div className="relative">
-                        <select value={selectedQuizId || ''} onChange={(e) => setSelectedQuizId(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-xl p-4 text-white focus:border-neon-purple outline-none cursor-pointer text-lg appearance-none shadow-sm hover:border-gray-500 transition-colors">
-                            {availableQuizzes.map(quiz => (
-                                <option key={quiz.id} value={String(quiz.id)}>{quiz.title} ({quiz.difficulty})</option>
-                            ))}
-                        </select>
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">▼</div>
+        <form onSubmit={handleCreateRoom} className="flex flex-col h-full animate-fade-in">
+            <div className="text-center mb-8 mt-4">
+                <h2 className="text-3xl font-black text-white mb-2">Configure Lobby</h2>
+                <p className="text-gray-400 text-sm">Select the material for this session.</p>
+            </div>
+
+            <div className="flex-1">
+                {quizzesLoading ? (
+                    <div className="h-full flex items-center justify-center text-neon-blue gap-2">
+                        <Loader className="animate-spin" /> Loading Library...
                     </div>
-                </>
-            )}
-            <div className="pt-6 space-y-3">
-                <Button type="submit" variant="success" className="w-full h-14 text-lg font-bold shadow-lg shadow-purple-500/20" disabled={isRoomActionPending}>
-                    Create Lobby <ArrowRight className="ml-2" />
-                </Button>
-                <Button type="button" onClick={handleCancel} variant="outline" className="w-full border-gray-700 text-gray-400 hover:text-white hover:bg-gray-800" disabled={false}>
+                ) : (
+                    <div className="space-y-4">
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-1">Select Quiz Material</label>
+                        <div className="relative group">
+                            <select 
+                                value={selectedQuizId || ''} 
+                                onChange={(e) => setSelectedQuizId(e.target.value)} 
+                                className="w-full bg-black/40 border border-gray-700 rounded-2xl p-5 text-white focus:border-neon-blue focus:ring-1 focus:ring-neon-blue outline-none cursor-pointer text-lg appearance-none shadow-inner transition-all font-medium"
+                            >
+                                {availableQuizzes.map(quiz => (
+                                    <option key={quiz.id} value={String(quiz.id)} className="bg-gray-900">
+                                        {quiz.title} • {quiz.difficulty}
+                                    </option>
+                                ))}
+                            </select>
+                            <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 group-hover:text-neon-blue transition-colors">
+                                <ArrowRight size={20} className="rotate-90" />
+                            </div>
+                        </div>
+                        
+                        {selectedQuizId && (
+                            <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-start gap-3">
+                                <AlertCircle size={18} className="text-blue-400 mt-0.5 shrink-0" />
+                                <p className="text-xs text-blue-200 leading-relaxed">
+                                    The game will start once all players have joined the lobby. As the host, you control when the questions begin.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mt-8">
+                <Button type="button" onClick={handleCancel} variant="outline" className="border-gray-700 text-gray-400 hover:text-white hover:bg-gray-800 h-14">
                     Cancel
+                </Button>
+                <Button type="submit" variant="success" className="h-14 font-bold text-lg shadow-[0_0_20px_rgba(0,243,255,0.2)] bg-linear-to-r from-blue-600 to-purple-600 border-none text-white hover:opacity-90" disabled={isRoomActionPending}>
+                    Create
                 </Button>
             </div>
         </form>
@@ -536,57 +579,64 @@ export default function Multiplayer() {
         return (
             <div className="space-y-6 animate-fade-in">
                 <div className="flex flex-col items-center border-b border-gray-800 pb-6">
-                    <span className="text-xs font-bold text-neon-blue uppercase tracking-widest mb-2">Lobby Ready</span>
-                    <h2 className="text-3xl md:text-4xl font-black text-white">{lobbyData.quizTitle}</h2>
+                    <span className="text-xs font-bold text-neon-blue uppercase tracking-widest mb-2 bg-neon-blue/10 px-3 py-1 rounded-full border border-neon-blue/20">Lobby Active</span>
+                    <h2 className="text-3xl md:text-4xl font-black text-white mt-3 text-center">{lobbyData.quizTitle}</h2>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-gray-900/50 p-4 rounded-2xl border border-gray-700">
-                        <div className="flex justify-between items-center mb-4">
+                    {/* Players List */}
+                    <div className="bg-black/30 p-5 rounded-3xl border border-white/5 flex flex-col h-[380px]">
+                        <div className="flex justify-between items-center mb-4 pb-2 border-b border-white/5">
                             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                                <Users size={16} /> Players ({players.length})
+                                <Users size={16} /> Roster ({players.length})
                             </h3>
                             {lobbyData.host === currentUsername && (
-                                <span className="text-xs bg-neon-purple/20 text-neon-purple px-2 py-0.5 rounded-full border border-neon-purple/50">You are Host</span>
+                                <span className="text-[10px] font-bold bg-purple-500/20 text-purple-300 px-2 py-1 rounded border border-purple-500/30">HOST</span>
                             )}
                         </div>
-                        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                        <div className="space-y-2 overflow-y-auto pr-2 custom-scrollbar flex-1">
                             {players.map(player => (
-                                <div key={player.username} className="flex justify-between items-center p-3 bg-gray-800 rounded-xl border border-gray-700/50">
+                                <div key={player.username} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
                                     <div className="flex items-center gap-3">
-                                        <div className={`w-2 h-2 rounded-full ${player.isHost ? 'bg-neon-purple' : 'bg-neon-green'} animate-pulse`}></div>
-                                        <span className="text-white font-medium">{player.username}</span>
+                                        <div className={`w-2.5 h-2.5 rounded-full ${player.isHost ? 'bg-neon-purple shadow-[0_0_10px_#bc13fe]' : 'bg-neon-green shadow-[0_0_8px_#39ff14]'}`}></div>
+                                        <span className="text-white font-bold tracking-wide">{player.username}</span>
                                     </div>
-                                    {player.username === currentUsername && <span className="text-xs text-gray-500 font-bold">YOU</span>}
+                                    {player.username === currentUsername && <span className="text-[10px] bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded font-mono">YOU</span>}
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    <div className="bg-gray-900/50 p-4 rounded-2xl border border-gray-700 flex flex-col items-center text-center space-y-6">
-                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                            <Share2 size={16} /> Invite Friends
+                    {/* Invite Section */}
+                    <div className="bg-black/30 p-5 rounded-3xl border border-white/5 flex flex-col items-center justify-between text-center h-[380px]">
+                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 w-full justify-center border-b border-white/5 pb-4">
+                            <Share2 size={16} /> Scan to Join
                         </h3>
-                        <div className="p-3 bg-white rounded-xl shadow-lg">
-                             <QRCodeSVG value={inviteLink} size={120} level={"H"} />
+                        
+                        <div className="p-3 bg-white rounded-2xl shadow-xl">
+                             <QRCodeSVG value={inviteLink} size={140} level={"H"} />
                         </div>
-                        <div className="w-full space-y-3">
-                            <div className="flex items-center gap-2 bg-black/40 p-1.5 pr-3 rounded-xl border border-gray-700 group hover:border-neon-blue transition-colors">
-                                <div className="bg-gray-800 px-3 py-2 rounded-lg text-neon-green font-mono font-bold text-xl tracking-widest border border-gray-700">
+                        
+                        <div className="w-full space-y-3 mt-auto">
+                            <div className="flex items-center gap-2 bg-gray-900 p-1.5 pr-3 rounded-xl border border-gray-700 group hover:border-neon-blue transition-colors">
+                                <div className="bg-gray-800 px-4 py-2 rounded-lg text-neon-green font-mono font-bold text-2xl tracking-widest border border-gray-700 shadow-inner">
                                     {lobbyData.roomCode}
                                 </div>
-                                <div className="flex-1 text-left text-xs text-gray-500 font-medium">Room Code</div>
-                                <button onClick={() => copyToClipboard(lobbyData.roomCode, 'code')} className="text-gray-400 hover:text-white p-2">
+                                <div className="flex-1 text-left pl-2">
+                                    <div className="text-[10px] text-gray-500 font-bold uppercase">Room Code</div>
+                                </div>
+                                <button onClick={() => copyToClipboard(lobbyData.roomCode, 'code')} className="text-gray-400 hover:text-white p-2 hover:bg-white/10 rounded-lg transition">
                                     {copiedField === 'code' ? <CheckCircle size={20} className="text-green-500" /> : <Copy size={20} />}
                                 </button>
                             </div>
-                            <div className="flex items-center gap-2 bg-black/40 p-2 rounded-xl border border-gray-700 cursor-pointer group hover:border-neon-blue transition-colors" onClick={() => copyToClipboard(inviteLink, 'link')}>
+                            
+                            <div className="flex items-center gap-2 bg-gray-900 p-2 rounded-xl border border-gray-700 cursor-pointer group hover:border-neon-blue transition-colors" onClick={() => copyToClipboard(inviteLink, 'link')}>
                                 <div className="bg-gray-800 p-2 rounded-lg text-neon-blue border border-gray-700"><LinkIcon size={18} /></div>
-                                <div className="flex-1 text-left">
-                                    <div className="text-xs text-gray-500 font-medium">Direct Link</div>
-                                    <div className="text-xs text-gray-400 truncate max-w-[120px]">{inviteLink}</div>
+                                <div className="flex-1 text-left overflow-hidden">
+                                    <div className="text-[10px] text-gray-500 font-bold uppercase">Direct Link</div>
+                                    <div className="text-xs text-gray-400 truncate w-full opacity-60">{inviteLink}</div>
                                 </div>
-                                <button className="text-gray-400 hover:text-white p-2">
+                                <button className="text-gray-400 hover:text-white p-2 hover:bg-white/10 rounded-lg transition">
                                     {copiedField === 'link' ? <CheckCircle size={20} className="text-green-500" /> : <Copy size={20} />}
                                 </button>
                             </div>
@@ -594,17 +644,28 @@ export default function Multiplayer() {
                     </div>
                 </div>
 
-                <div className="pt-4 border-t border-gray-800 flex flex-col gap-3">
+                <div className="pt-6 border-t border-gray-800 flex items-center justify-between gap-4">
+                    <Button type="button" onClick={leaveRoom} variant="ghost" className="text-red-500 hover:bg-red-500/10 px-6">
+                        Leave Room
+                    </Button>
+                    
                     {lobbyData.host === currentUsername ? (
-                        <Button onClick={handleStartGame} variant="success" className="w-full justify-center h-14 text-lg shadow-lg shadow-green-500/20">Start Game</Button>
+                        <Button onClick={handleStartGame} variant="success" className="px-10 h-14 text-lg font-bold shadow-[0_0_20px_rgba(57,255,20,0.3)] bg-neon-green text-black hover:bg-[#32e010]">
+                            Start Game <ArrowRight className="ml-2" />
+                        </Button>
                     ) : (
-                        <div className="w-full py-4 text-center bg-gray-900 rounded-xl border border-gray-700 text-neon-blue font-bold animate-pulse">Waiting for Host to Start...</div>
+                        <div className="flex items-center gap-3 px-6 py-3 bg-gray-900 rounded-xl border border-gray-700/50">
+                            <Loader className="animate-spin text-neon-blue" size={20} />
+                            <span className="text-sm font-bold text-gray-300">Waiting for Host...</span>
+                        </div>
                     )}
-                    <Button type="button" onClick={leaveRoom} variant="ghost" className="w-full justify-center text-red-500 hover:bg-red-500/10">Leave Room</Button>
                 </div>
             </div>
         );
     };
+
+    // ... (Keep Countdown, Game, and Results as they are generally okay, or apply similar styling if desired. 
+    // For now, I will focus on the requested screens: Menu, Join, Loading)
 
     const renderCountdown = () => {
         if (!lobbyData) return renderMenu();
@@ -718,25 +779,30 @@ export default function Multiplayer() {
         );
     };
     
-    // UPDATED: ADDED CANCEL BUTTON HERE
+    // UPDATED: Loading screen
     const renderLoading = () => (
-        <div className="text-center text-neon-blue flex flex-col items-center justify-center space-y-4 h-64">
-            <Loader size={48} className="animate-spin" /> 
-            <p className="text-xl font-bold">{isRoomActionPending ? "Awaiting server response..." : "Connecting to server..."}</p>
-            <p className="text-sm text-gray-500">Waiting for room details. (Will time out in 15s if no response)</p>
+        <div className="text-center text-neon-blue flex flex-col items-center justify-center space-y-6 h-80 animate-fade-in">
+            <div className="relative">
+                <div className="absolute inset-0 bg-neon-blue/20 blur-xl rounded-full"></div>
+                <Loader size={64} className="animate-spin relative z-10" />
+            </div>
+            <div>
+                <p className="text-2xl font-black text-white tracking-wide">{isRoomActionPending ? "Establishing Connection..." : "Syncing..."}</p>
+                <p className="text-sm text-gray-500 mt-2 font-medium">Securing channel to game server.</p>
+            </div>
             <Button 
                 type="button" 
                 onClick={handleCancel} 
-                variant="ghost" 
-                className="mt-4 text-gray-500 hover:text-white border border-gray-700 hover:bg-gray-800 w-auto px-6"
+                variant="outline" 
+                className="mt-4 border-gray-700 text-gray-400 hover:text-white hover:bg-gray-800 w-auto px-8 rounded-full"
             >
-                Cancel
+                Cancel Request
             </Button>
         </div>
     );
 
     const renderContent = () => {
-        if (authLoading) return renderLoading(); // Wait for Auth
+        if (authLoading) return renderLoading(); 
 
         switch (view) {
             case 'guest_entry': return renderGuestEntry();
@@ -753,7 +819,12 @@ export default function Multiplayer() {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-dark-bg p-4 animate-fade-in">
-            <div className="bg-dark-surface p-8 rounded-3xl border border-gray-800 w-full max-w-4xl shadow-2xl">
+            {/* Main Glassmorphic Container */}
+            <div className="bg-[#1a1a2e]/80 backdrop-blur-xl p-8 rounded-[2rem] border border-white/10 w-full max-w-4xl shadow-2xl relative overflow-hidden">
+                
+                {/* Decorative Top Gradient Line */}
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-neon-blue via-purple-500 to-neon-green opacity-50"></div>
+                
                 {renderContent()}
             </div>
         </div>
