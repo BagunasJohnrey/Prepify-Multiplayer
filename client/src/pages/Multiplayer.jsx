@@ -6,6 +6,7 @@ import Input from '../components/ui/Input';
 import toast from 'react-hot-toast';
 import socket from '../utils/socket'; 
 import api from '../utils/api'; 
+import Confetti from 'react-confetti'; // <--- IMPORT CONFETTI
 
 const COUNTDOWN_SECONDS = 5; 
 const QUESTION_TIME_MS = 10000; 
@@ -34,6 +35,9 @@ export default function Multiplayer() {
     const roomActionTimeoutRef = useRef(null); 
     const [playerAnswerLocal, setPlayerAnswerLocal] = useState(null); 
     
+    // UI State
+    const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight }); // <--- CONFETTI SIZE
+
     const [availableQuizzes, setAvailableQuizzes] = useState([]);
     const [quizzesLoading, setQuizzesLoading] = useState(true);
     const [selectedQuizId, setSelectedQuizId] = useState(null);
@@ -58,6 +62,13 @@ export default function Multiplayer() {
             roomCode
         };
     }, [availableQuizzes, currentQIndex, user, view, lobbyData, roomCode]);
+
+    // --- Window Resize Listener for Confetti ---
+    useEffect(() => {
+        const handleResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     // --- Data Fetching ---
     useEffect(() => {
@@ -94,9 +105,7 @@ export default function Multiplayer() {
         };
     }, [view, isRoomActionPending]); 
 
-    // --- CHANGED: Core Timer Logic (Duration Based) ---
-    // Instead of calculating Date.now() differences (which causes drift),
-    // we simply count down seconds locally from the duration provided.
+    // --- Core Timer Logic ---
     const startQuestionTimer = (durationSeconds) => {
         if (qTimerIntervalRef.current) clearInterval(qTimerIntervalRef.current);
         
@@ -178,7 +187,6 @@ export default function Multiplayer() {
             setPlayerAnswerLocal(null); 
             setLobbyData(prev => ({...prev, quizTitle: data.quizTitle}));
             
-            // --- CHANGED: Use duration instead of timestamps ---
             const durationSec = data.duration ? (data.duration / 1000) : COUNTDOWN_SECONDS;
             setCountdown(durationSec);
             setView('countdown');
@@ -221,7 +229,6 @@ export default function Multiplayer() {
             setQAnswer(null);
             setPlayerAnswerLocal(null); 
 
-            // --- CHANGED: Use duration instead of deadline ---
             const durationSec = data.duration ? (data.duration / 1000) : 10;
             startQuestionTimer(durationSec);
             
@@ -312,7 +319,6 @@ export default function Multiplayer() {
         setIsAnswered(true);
         setPlayerAnswerLocal(selectedOption); 
         
-        // Calculate rough time taken (inverse of current countdown)
         const timeTaken = (QUESTION_TIME_MS / 1000 - timeLeft) * 1000; 
         
         socket.emit('submitAnswer', {
@@ -502,9 +508,12 @@ export default function Multiplayer() {
                         Q<span className="text-white font-bold">{currentQIndex + 1}</span>/{gameQuestions.length}
                     </h3>
                     <div className="flex items-center gap-4 text-white">
-                        <span className={`font-bold flex items-center gap-1 ${timeLeft <= 3 ? 'text-red-500 animate-pulse' : 'text-neon-blue'}`}>
-                            <Clock size={18} /> {timeLeft > 0 ? timeLeft : 0}s
+                        {/* --- CLOCK ALIGNMENT FIX START --- */}
+                        <span className={`font-bold flex items-center gap-1.5 leading-none ${timeLeft <= 3 ? 'text-red-500 animate-pulse' : 'text-neon-blue'}`}>
+                            <Clock size={18} className="mb-[1px]" /> {timeLeft > 0 ? timeLeft : 0}s
                         </span>
+                        {/* --- CLOCK ALIGNMENT FIX END --- */}
+                        
                         <span className="text-neon-green font-bold flex items-center gap-1">
                             <Zap size={18} /> {player.score}
                         </span>
@@ -569,7 +578,17 @@ export default function Multiplayer() {
     const renderResults = () => {
         if (!playerRanking || !lobbyData) return renderMenu();
         return (
-            <div className="space-y-6 text-center">
+            <div className="space-y-6 text-center relative">
+                 {/* --- CONFETTI ADDED START --- */}
+                 <Confetti 
+                    width={windowSize.width} 
+                    height={windowSize.height} 
+                    recycle={false} 
+                    numberOfPieces={500} 
+                    gravity={0.15}
+                 />
+                 {/* --- CONFETTI ADDED END --- */}
+
                 <Trophy size={60} className="text-neon-yellow mx-auto" />
                 <h2 className="text-4xl font-black text-white">Final Ranking</h2>
                 <p className="text-gray-400">Quiz: {lobbyData.quizTitle}</p>
