@@ -21,11 +21,7 @@
       "destination": "/server/server.js"
     },
     {
-      "source": "/assets/(.*)",
-      "destination": "/assets/$1"
-    },
-    {
-      "source": "/((?!assets/|.*\\..*).*)", 
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]

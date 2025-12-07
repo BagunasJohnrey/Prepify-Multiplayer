@@ -345,10 +345,12 @@ app.use((req, res, next) => {
         return next();
     }
     
-    // Serve the React app for all other routes
-    res.sendFile(path.join(__dirname, '../client/dist/index.html'), (err) => {
+    const indexPath = path.join(__dirname, '../client/dist/index.html');
+    
+    res.sendFile(indexPath, (err) => {
         if (err) {
-            res.status(500).send('Error loading application');
+            console.error("Error serving index.html:", err);
+            res.status(500).send('Error: Client build not found. Please run "npm run build" in the client directory.');
         }
     });
 });
