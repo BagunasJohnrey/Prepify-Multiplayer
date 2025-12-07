@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'; 
+import { useState, useEffect, useRef, useCallback } from 'react'; 
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Users, PlusCircle, LogIn, Loader, Clock, Trophy, Zap, AlertCircle, CheckCircle, XCircle, Copy, Link as LinkIcon, Share2, User, KeyRound, ArrowRight, UserPlus, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -15,7 +15,7 @@ const QUESTION_TIME_MS = 10000;
 const ANSWER_REVEAL_DELAY_MS = 3000; 
 
 export default function Multiplayer() {
-    const { user, loading: authLoading } = useAuth(); // Import loading state
+    const { user, loading: authLoading } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     
@@ -79,16 +79,26 @@ export default function Multiplayer() {
         };
     }, [availableQuizzes, currentQIndex, user, guestName, isGuestSetup, view, lobbyData, roomCode]);
 
+    // --- ACTIONS (Moved up for useEffect dependencies) ---
+    
+    // Completely resets state and removes URL parameters
+    const handleCancel = useCallback(() => {
+        setIsRoomActionPending(false);
+        setRoomCode(''); 
+        setView('menu');
+        toast.dismiss();
+        
+        // CRITICAL FIX: Remove ?code=... from URL so useEffect doesn't trigger again
+        navigate('/multiplayer', { replace: true });
+    }, [navigate]);
+
     // --- AUTH & INITIALIZATION LOGIC ---
     useEffect(() => {
-        // Wait for Auth to finish loading before making decisions
         if (authLoading) return;
 
         if (user) {
-            // User is logged in, ready for menu
             if (view === 'loading' || view === 'guest_entry') setView('menu');
         } else {
-            // Not logged in: Show guest entry unless already set up
             if (!isGuestSetup && view !== 'guest_entry') {
                 setView('guest_entry');
             } else if (isGuestSetup && view === 'loading') {
@@ -102,16 +112,21 @@ export default function Multiplayer() {
         const searchParams = new URLSearchParams(location.search);
         const codeParam = searchParams.get('code');
         
-        if (codeParam && !roomCode) {
-            setRoomCode(codeParam.toUpperCase());
-        }
+        // Only act if there is a code param
+        if (codeParam) {
+            const cleanCode = codeParam.toUpperCase();
+            
+            // Only update state if it's different to prevent loops
+            if (cleanCode !== roomCode) {
+                setRoomCode(cleanCode);
+            }
 
-        // Only switch to JOIN view if we are fully authenticated (Guest or User)
-        // and currently in the menu (ready to act)
-        if (codeParam && currentUsername && view === 'menu') {
-            setView('join');
-            // Do not clear history yet, let the user confirm joining
-            toast.success('Room code found! Click Enter to join.', { icon: '🔗' });
+            // Only switch to JOIN view if we are fully authenticated (Guest or User)
+            // AND we are currently in the menu. 
+            if (currentUsername && view === 'menu') {
+                setView('join');
+                toast.success('Room code found! Click Enter to join.', { icon: '🔗', id: 'join-toast' });
+            }
         }
     }, [location, view, currentUsername, roomCode]);
 
@@ -144,8 +159,7 @@ export default function Multiplayer() {
         if (view === 'loading' && isRoomActionPending) {
             roomActionTimeoutRef.current = setTimeout(() => {
                 toast.error("Request timed out.", { duration: 4000 });
-                setIsRoomActionPending(false);
-                setView('menu');
+                handleCancel(); // Use handleCancel to cleanup
             }, 10000); 
         } else {
             if (roomActionTimeoutRef.current) clearTimeout(roomActionTimeoutRef.current);
@@ -153,7 +167,7 @@ export default function Multiplayer() {
         return () => {
             if (roomActionTimeoutRef.current) clearTimeout(roomActionTimeoutRef.current);
         };
-    }, [view, isRoomActionPending]); 
+    }, [view, isRoomActionPending, handleCancel]); 
 
     // --- Timer Logic ---
     const startQuestionTimer = (durationSeconds) => {
@@ -192,8 +206,8 @@ export default function Multiplayer() {
             const quiz = availableQuizzes.find(q => String(q.id) === String(data.quizId));
             const quizTitle = quiz ? quiz.title : 'Unknown Quiz';
             
-            // If we successfully joined, clear the URL code to prevent loop
-            window.history.replaceState({}, '', '/multiplayer');
+            // Clean URL on successful join so refresh doesn't re-trigger join logic
+            navigate('/multiplayer', { replace: true });
 
             setLobbyData({
                 roomCode: data.roomCode,
@@ -275,9 +289,9 @@ export default function Multiplayer() {
             setIsRoomActionPending(false); 
             toast.error(message, { duration: 3000 });
             
-            // If we are stuck in loading, go back to menu
+            // If we are stuck in loading, go back to menu AND clear URL
             if (stateRef.current.view === 'loading') {
-                setView('menu');
+                handleCancel();
             }
         };
 
@@ -304,17 +318,9 @@ export default function Multiplayer() {
             if (countdownInterval) clearInterval(countdownInterval);
             stopQuestionTimer();
         };
-    }, []);
+    }, [handleCancel, navigate]);
 
-    // --- Actions ---
-    
-    const handleCancel = () => {
-        setIsRoomActionPending(false);
-        setRoomCode(''); 
-        // Reset everything to menu state
-        setView('menu');
-        toast.dismiss();
-    };
+    // --- Other Actions ---
 
     const handleGuestEntry = (e) => {
         e.preventDefault();
@@ -361,16 +367,12 @@ export default function Multiplayer() {
         toast.success("Answer sent!", { duration: 1000 });
     };
     
-    // FIX: Cleaner Leave Logic
     const leaveRoom = () => {
         if (lobbyData) {
-            // Use the new server event instead of disconnect
             socket.emit('leaveRoom', { roomCode: lobbyData.roomCode });
         }
         setLobbyData(null);
-        setRoomCode(''); // Clear code so we don't rejoin immediately
-        setView('menu');
-        setIsRoomActionPending(false);
+        handleCancel(); // Use handleCancel to ensure URL is also cleaned
     };
 
     const copyToClipboard = (text, field) => {
@@ -491,7 +493,6 @@ export default function Multiplayer() {
                 <Button type="submit" variant="primary" className="w-full h-14 text-lg font-bold bg-neon-green hover:bg-green-500 text-black shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all hover:scale-[1.02]" disabled={isRoomActionPending || roomCode.length !== 4}>
                     Enter Room <ArrowRight className="ml-2" />
                 </Button>
-                {/* Fixed Cancel Button */}
                 <Button type="button" onClick={handleCancel} variant="ghost" className="w-full text-gray-500 hover:text-white" disabled={false}>
                     <ArrowLeft size={16} className="mr-2" /> Cancel
                 </Button>
