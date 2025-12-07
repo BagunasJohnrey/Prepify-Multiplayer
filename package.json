@@ -6,9 +6,11 @@
   "main": "server.js",
   "scripts": {
     "start": "node server/server.js",
-    "dev": "nodemon server.js",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "nodemon server/server.js",
     "client": "npm run dev --prefix client",
-    "build": "npm install && cd client && npm install && npm run build"
+    "build": "npm install && cd client && npm install && npm run build", 
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
