@@ -11,14 +11,13 @@ const COUNTDOWN_SECONDS = 5;
 const QUESTION_TIME_MS = 10000; 
 const ANSWER_REVEAL_DELAY_MS = 3000; 
 
-
 export default function Multiplayer() {
     const { user } = useAuth();
     const [view, setView] = useState('menu'); 
     const [roomCode, setRoomCode] = useState('');
     const [lobbyData, setLobbyData] = useState(null); 
     const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
-    const [isConnected, setIsConnected] = useState(socket.connected); // Initialize with current state
+    const [isConnected, setIsConnected] = useState(socket.connected); 
     const [isRoomActionPending, setIsRoomActionPending] = useState(false); 
     
     // Game State
@@ -40,6 +39,27 @@ export default function Multiplayer() {
     const [quizzesLoading, setQuizzesLoading] = useState(true);
     const [selectedQuizId, setSelectedQuizId] = useState(null);
 
+    // --- State Ref Pattern (Fixes Timer/Socket Re-render issues) ---
+    const stateRef = useRef({
+        availableQuizzes,
+        currentQIndex,
+        user,
+        view,
+        lobbyData,
+        roomCode
+    });
+
+    useEffect(() => {
+        stateRef.current = {
+            availableQuizzes,
+            currentQIndex,
+            user,
+            view,
+            lobbyData,
+            roomCode
+        };
+    }, [availableQuizzes, currentQIndex, user, view, lobbyData, roomCode]);
+
     // --- Data Fetching ---
     useEffect(() => {
         const fetchQuizzes = async () => {
@@ -59,25 +79,19 @@ export default function Multiplayer() {
         fetchQuizzes();
     }, []);
 
-    // Watchdog Timer to prevent freezing if server response is lost
+    // Watchdog Timer
     useEffect(() => {
         if (view === 'loading' && isRoomActionPending) {
-            // Set a 15-second timeout 
             roomActionTimeoutRef.current = setTimeout(() => {
                 toast.error("Room action timed out. Please retry.", { duration: 5000 });
                 setView('menu');
                 setIsRoomActionPending(false);
             }, 15000); 
         } else {
-            if (roomActionTimeoutRef.current) {
-                clearTimeout(roomActionTimeoutRef.current);
-            }
+            if (roomActionTimeoutRef.current) clearTimeout(roomActionTimeoutRef.current);
         }
-        
         return () => {
-            if (roomActionTimeoutRef.current) {
-                clearTimeout(roomActionTimeoutRef.current);
-            }
+            if (roomActionTimeoutRef.current) clearTimeout(roomActionTimeoutRef.current);
         };
     }, [view, isRoomActionPending]); 
 
@@ -107,15 +121,11 @@ export default function Multiplayer() {
     useEffect(() => {
         let countdownInterval;
 
-        // FIX: Check connection immediately on mount
-        if (socket.connected) {
-            setIsConnected(true);
-        }
+        if (socket.connected) setIsConnected(true);
 
-        // --- Connection/Disconnection Listeners ---
         const onConnect = () => {
             setIsConnected(true);
-            // If the user was trying to join a room before reconnecting, re-emit the join event
+            const { view, roomCode, user } = stateRef.current;
             if (view === 'loading' && roomCode) {
                  socket.emit('joinRoom', { roomCode, username: user.username });
             }
@@ -123,6 +133,7 @@ export default function Multiplayer() {
 
         const onDisconnect = () => {
             setIsConnected(false);
+            const { lobbyData } = stateRef.current;
             if (lobbyData) {
                 toast.error("Disconnected from lobby. Reconnecting...", { duration: 3000 });
             }
@@ -130,19 +141,13 @@ export default function Multiplayer() {
         
         socket.on('connect', onConnect);
         socket.on('disconnect', onDisconnect);
-        // --- End Connection Listeners ---
-
-
-        const getQuizTitle = (quizId) => {
-            const quiz = availableQuizzes.find(q => String(q.id) === String(quizId));
-            return quiz ? quiz.title : 'Unknown Quiz';
-        };
 
         const handleLobbyUpdate = (data) => {
-            // CRITICAL: Clear pending state on successful response
             setIsRoomActionPending(false); 
             
-            const quizTitle = getQuizTitle(data.quizId);
+            const { availableQuizzes } = stateRef.current;
+            const quiz = availableQuizzes.find(q => String(q.id) === String(data.quizId));
+            const quizTitle = quiz ? quiz.title : 'Unknown Quiz';
             
             setLobbyData({
                 roomCode: data.roomCode,
@@ -158,8 +163,10 @@ export default function Multiplayer() {
         };
         
         const handlePlayerAnswered = (data) => {
+            const { currentQIndex } = stateRef.current;
             if (data.qIndex === currentQIndex) {
-                 toast(`${data.username} submitted an answer!`, { icon: '聡' });
+                 // FIX: Removed broken icon property
+                 toast(`${data.username} submitted an answer!`);
             }
         };
 
@@ -175,6 +182,9 @@ export default function Multiplayer() {
             setCountdown(timeLeft);
             setView('countdown');
             
+            // Clear any existing interval before starting a new one
+            if (countdownInterval) clearInterval(countdownInterval);
+
             countdownInterval = setInterval(() => {
                 setCountdown(c => {
                     const newCount = c - 1;
@@ -226,16 +236,14 @@ export default function Multiplayer() {
         };
         
         const handleRoomError = (message) => {
-            // CRITICAL: Clear pending state on error response
             setIsRoomActionPending(false); 
             toast.error(message, { duration: 3000 });
             setView('menu'); 
             setLobbyData(null);
         };
 
-        // Attach listeners
         socket.on('lobbyUpdate', handleLobbyUpdate); 
-        socket.on('playerJoined', (data) => toast(`坎 ${data.username} joined the lobby!`, { icon: '窓' })); 
+        socket.on('playerJoined', (data) => toast(`${data.username} joined the lobby!`)); 
         socket.on('playerAnswered', handlePlayerAnswered); 
         socket.on('startCountdown', handleStartCountdown); 
         socket.on('showAnswer', handleShowAnswer); 
@@ -244,6 +252,8 @@ export default function Multiplayer() {
         socket.on('roomError', handleRoomError);
 
         return () => {
+            socket.off('connect', onConnect);
+            socket.off('disconnect', onDisconnect);
             socket.off('lobbyUpdate', handleLobbyUpdate);
             socket.off('playerJoined');
             socket.off('playerAnswered', handlePlayerAnswered);
@@ -255,14 +265,11 @@ export default function Multiplayer() {
             if (countdownInterval) clearInterval(countdownInterval);
             stopQuestionTimer();
         };
-    }, [availableQuizzes, currentQIndex, user.username, view, lobbyData, roomCode]); 
-    // --- End Socket Listeners Setup ---
+    }, []); // FIXED: Empty dependency array ensures timers survive re-renders
 
-
-    // --- Actions (Emitting to Server) ---
+    // --- Actions ---
     const handleCreateRoom = (e) => {
         e.preventDefault();
-        // Use isRoomActionPending to prevent double submission
         if (!isConnected || isRoomActionPending) return toast.error("Connection or previous action pending.");
         if (quizzesLoading || availableQuizzes.length === 0) {
             toast.error("Please wait for quizzes to load or generate one.", { duration: 3000 });
@@ -274,7 +281,7 @@ export default function Multiplayer() {
             return;
         }
         setView('loading');
-        setIsRoomActionPending(true); // ACTIVATE WATCHDOG
+        setIsRoomActionPending(true); 
         socket.emit('createRoom', { username: user.username, quizId: selectedQuizId });
     };
 
@@ -290,11 +297,9 @@ export default function Multiplayer() {
         
         setView('loading');
         setRoomCode(code);
-        setIsRoomActionPending(true); // ACTIVATE WATCHDOG
+        setIsRoomActionPending(true); 
         socket.emit('joinRoom', { roomCode: code, username: user.username });
     };
-    
-    // ... (rest of actions and render views remain the same)
 
     const handleStartGame = () => {
         if (!lobbyData || lobbyData.host !== user.username) return;
@@ -319,19 +324,15 @@ export default function Multiplayer() {
     
     const leaveRoom = () => {
         if (lobbyData) {
-            // Emitting to server so it can clean up and notify others
             socket.emit('leaveRoom', { roomCode: lobbyData.roomCode }); 
-            // Simple reconnect to reset socket state
             socket.disconnect(); 
             socket.connect(); 
         }
         setLobbyData(null);
         setView('menu');
     };
-    
 
     // --- Render Views ---
-
     const renderMenu = () => (
         <div className="space-y-6">
             <h2 className="text-3xl font-black text-white mb-6">Multiplayer Arena</h2>
@@ -422,9 +423,7 @@ export default function Multiplayer() {
 
     const renderLobby = () => {
         if (!lobbyData) return renderMenu();
-
         let players = lobbyData.players || [];
-        
         return (
             <div className="space-y-6">
                 <h2 className="text-4xl font-black text-neon-green">ROOM: {lobbyData.roomCode}</h2>
@@ -432,8 +431,6 @@ export default function Multiplayer() {
                     <Users size={20} className="text-neon-blue" />
                     Quiz: <span className="text-white font-bold">{lobbyData.quizTitle || 'Loading...'}</span>
                 </p>
-
-                {/* Player List */}
                 <div className="bg-gray-900 p-6 rounded-2xl border border-gray-700 space-y-3">
                     <h3 className="text-sm font-bold uppercase text-gray-500 tracking-wider">Players ({players.length})</h3>
                     {players.map(player => (
@@ -444,8 +441,6 @@ export default function Multiplayer() {
                         </div>
                     ))}
                 </div>
-
-                {/* Host Controls */}
                 {lobbyData.host === user.username ? (
                     <Button onClick={handleStartGame} variant="success" className="w-full justify-center">
                         Start Game (Host Only)
@@ -453,15 +448,12 @@ export default function Multiplayer() {
                 ) : (
                     <p className="text-center text-neon-blue font-bold p-2 bg-gray-900 rounded-lg border border-gray-700">Waiting for Host to Start...</p>
                 )}
-
-                {/* Invitation Details */}
                 <div className="p-4 bg-gray-800 rounded-xl border border-gray-700 text-center">
                     <p className="text-gray-400 text-xs mb-2">Share this code to invite friends:</p>
                     <div className="text-2xl font-mono text-neon-green font-bold flex items-center justify-center gap-3">
                         <QrCode size={24} className="text-neon-green" /> {lobbyData.roomCode}
                     </div>
                 </div>
-
                 <Button type="button" onClick={leaveRoom} variant="outline" className="w-full justify-center">
                     Leave Room
                 </Button>
@@ -471,7 +463,6 @@ export default function Multiplayer() {
 
     const renderCountdown = () => {
         if (!lobbyData) return renderMenu();
-
         return (
             <div className="text-center space-y-8 animate-pulse">
                 <h2 className="text-6xl font-black text-white mb-4">Game Starting In...</h2>
@@ -491,7 +482,6 @@ export default function Multiplayer() {
         if (!gameQuestions || !lobbyData) return renderMenu();
         const q = gameQuestions[currentQIndex];
         const player = lobbyData.players.find(p => p.username === user.username);
-        
         const playerAnswer = playerAnswerLocal;
         
         return (
@@ -500,27 +490,20 @@ export default function Multiplayer() {
                     <h3 className="text-xl font-mono text-gray-400">
                         Q<span className="text-white font-bold">{currentQIndex + 1}</span>/{gameQuestions.length}
                     </h3>
-                    
                     <div className="flex items-center gap-4 text-white">
-                        {/* 10-Second Timer */}
                         <span className={`font-bold flex items-center gap-1 ${timeLeft <= 3 ? 'text-red-500 animate-pulse' : 'text-neon-blue'}`}>
                             <Clock size={18} /> {timeLeft > 0 ? timeLeft : 0}s
                         </span>
-                        {/* Score */}
                         <span className="text-neon-green font-bold flex items-center gap-1">
                             <Zap size={18} /> {player.score}
                         </span>
                     </div>
                 </div>
-                
                 <h2 className="text-2xl font-bold text-white leading-relaxed">{q.question}</h2>
-
                 <div className="grid gap-4">
                     {q.options.map((opt, idx) => {
                         let buttonClass = '';
                         let icon = null;
-                        
-                        // Answer Reveal Logic
                         if (showAnswerKey) {
                             if (opt === qAnswer.correctAnswer) {
                                 buttonClass = 'border-neon-green bg-green-900/20 text-neon-green';
@@ -532,11 +515,9 @@ export default function Multiplayer() {
                                 buttonClass = 'opacity-50';
                             }
                         } else if (isAnswered && opt === playerAnswer) {
-                             // Answer Submitted (pre-reveal)
                             buttonClass = 'border-neon-blue/50 bg-neon-blue/10 text-neon-blue';
                             icon = <CheckCircle size={20} />;
                         }
-
                         return (
                             <Button 
                                 key={idx}
@@ -551,7 +532,6 @@ export default function Multiplayer() {
                         );
                     })}
                 </div>
-
                 {showAnswerKey && (
                     <div className="mt-8 pt-4 border-t border-gray-800 animate-fade-in">
                         <div className="flex items-center justify-between text-lg font-bold">
@@ -565,7 +545,6 @@ export default function Multiplayer() {
                         <p className="text-gray-400 text-sm mt-2 leading-relaxed">{qAnswer.explanation}</p>
                     </div>
                 )}
-                
                 <div className="pt-4 text-center">
                     <p className="text-sm text-gray-500">
                         {isAnswered && !showAnswerKey ? 'Waiting for results...' : 
@@ -578,13 +557,11 @@ export default function Multiplayer() {
 
     const renderResults = () => {
         if (!playerRanking || !lobbyData) return renderMenu();
-        
         return (
             <div className="space-y-6 text-center">
                 <Trophy size={60} className="text-neon-yellow mx-auto" />
                 <h2 className="text-4xl font-black text-white">Final Ranking</h2>
                 <p className="text-gray-400">Quiz: {lobbyData.quizTitle}</p>
-
                 <div className="bg-gray-900 p-4 rounded-2xl border border-gray-700 space-y-3">
                     {playerRanking.map((p, index) => (
                         <div key={p.username} className={`p-3 rounded-lg flex justify-between items-center font-bold ${
@@ -598,7 +575,6 @@ export default function Multiplayer() {
                         </div>
                     ))}
                 </div>
-
                 <Button onClick={leaveRoom} variant="primary" className="w-full justify-center">
                     Return to Menu
                 </Button>
@@ -614,26 +590,16 @@ export default function Multiplayer() {
         </div>
     );
 
-
     const renderContent = () => {
         switch (view) {
-            case 'create':
-                return renderCreateRoom();
-            case 'join':
-                return renderJoinRoom();
-            case 'lobby':
-                return renderLobby();
-            case 'countdown':
-                return renderCountdown(); 
-            case 'game': 
-                return renderGame(); 
-            case 'results':
-                return renderResults();
-            case 'loading':
-                return renderLoading();
-            case 'menu':
-            default:
-                return renderMenu();
+            case 'create': return renderCreateRoom();
+            case 'join': return renderJoinRoom();
+            case 'lobby': return renderLobby();
+            case 'countdown': return renderCountdown(); 
+            case 'game': return renderGame(); 
+            case 'results': return renderResults();
+            case 'loading': return renderLoading();
+            case 'menu': default: return renderMenu();
         }
     };
 
