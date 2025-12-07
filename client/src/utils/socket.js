@@ -12,8 +12,9 @@ const socket = io(API_BASE_URL, {
     forceNew: true,
     withCredentials: false,
     
-    timeout: 10000, 
-    reconnectionAttempts: 5 
+    // INCREASE TIMEOUT AND ATTEMPTS FOR COLD START
+    timeout: 60000,           // Wait up to 60 seconds for initial connection
+    reconnectionAttempts: 10  // Allow more retries
 });
 
 socket.on('connect', () => {
