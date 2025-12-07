@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'; 
-import { Users, PlusCircle, LogIn, QrCode, Loader, Clock, Trophy, Zap, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Users, PlusCircle, LogIn, QrCode, Loader, Clock, Trophy, Zap, AlertCircle, CheckCircle, XCircle, Copy, Link as LinkIcon, Share2, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -7,6 +8,7 @@ import toast from 'react-hot-toast';
 import socket from '../utils/socket'; 
 import api from '../utils/api'; 
 import Confetti from 'react-confetti'; 
+import { QRCodeSVG } from 'qrcode.react';
 
 const COUNTDOWN_SECONDS = 5; 
 const QUESTION_TIME_MS = 10000; 
@@ -14,12 +16,24 @@ const ANSWER_REVEAL_DELAY_MS = 3000;
 
 export default function Multiplayer() {
     const { user } = useAuth();
-    const [view, setView] = useState('menu'); 
+    const navigate = useNavigate();
+    const location = useLocation();
+    
+    // --- GUEST STATE ---
+    const [guestName, setGuestName] = useState('');
+    const [isGuestSetup, setIsGuestSetup] = useState(false); // True if guest name is set
+
+    // Determine the active username
+    const currentUsername = user?.username || (isGuestSetup ? guestName : null);
+
+    // View State
+    const [view, setView] = useState('loading'); // Start in loading to determine auth state
     const [roomCode, setRoomCode] = useState('');
     const [lobbyData, setLobbyData] = useState(null); 
     const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
     const [isConnected, setIsConnected] = useState(socket.connected); 
     const [isRoomActionPending, setIsRoomActionPending] = useState(false); 
+    const [copiedField, setCopiedField] = useState(null);
     
     // Game State
     const [gameQuestions, setGameQuestions] = useState(null);
@@ -35,18 +49,18 @@ export default function Multiplayer() {
     const roomActionTimeoutRef = useRef(null); 
     const [playerAnswerLocal, setPlayerAnswerLocal] = useState(null); 
     
-    // UI State
     const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
-
     const [availableQuizzes, setAvailableQuizzes] = useState([]);
     const [quizzesLoading, setQuizzesLoading] = useState(true);
     const [selectedQuizId, setSelectedQuizId] = useState(null);
 
-    // --- State Ref Pattern ---
+    // --- State Ref ---
     const stateRef = useRef({
         availableQuizzes,
         currentQIndex,
         user,
+        guestName,
+        isGuestSetup,
         view,
         lobbyData,
         roomCode
@@ -57,13 +71,44 @@ export default function Multiplayer() {
             availableQuizzes,
             currentQIndex,
             user,
+            guestName,
+            isGuestSetup,
             view,
             lobbyData,
             roomCode
         };
-    }, [availableQuizzes, currentQIndex, user, view, lobbyData, roomCode]);
+    }, [availableQuizzes, currentQIndex, user, guestName, isGuestSetup, view, lobbyData, roomCode]);
 
-    // --- Window Resize Listener for Confetti ---
+    // --- AUTH & INITIALIZATION LOGIC ---
+    useEffect(() => {
+        // If user is logged in, they are ready
+        if (user) {
+            if (view === 'loading' || view === 'guest_entry') setView('menu');
+        } else {
+            // If not logged in and guest name not set, show guest entry
+            if (!isGuestSetup && view !== 'guest_entry') {
+                setView('guest_entry');
+            } else if (isGuestSetup && view === 'loading') {
+                setView('menu');
+            }
+        }
+    }, [user, isGuestSetup, view]);
+
+    // --- NEW: Handle URL Params for Direct Join Links ---
+    useEffect(() => {
+        const searchParams = new URLSearchParams(location.search);
+        const codeParam = searchParams.get('code');
+        
+        // If we have a code, but no user/guest name yet, we wait in 'guest_entry'
+        // If we have a code AND a username, we auto-switch to join
+        if (codeParam && currentUsername && (view === 'menu' || view === 'guest_entry')) {
+            setRoomCode(codeParam.toUpperCase());
+            setView('join');
+            window.history.replaceState({}, '', '/multiplayer');
+            toast('Code detected from link!', { icon: '🔗' });
+        }
+    }, [location, view, currentUsername]);
+
     useEffect(() => {
         const handleResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
         window.addEventListener('resize', handleResize);
@@ -74,13 +119,14 @@ export default function Multiplayer() {
     useEffect(() => {
         const fetchQuizzes = async () => {
             try {
+                // Quizzes are public, so guests can fetch them too
                 const { data } = await api.get('/quizzes');
                 setAvailableQuizzes(data);
                 if (data.length > 0) {
                     setSelectedQuizId(String(data[0].id)); 
                 }
             } catch (error) {
-                toast.error("Failed to load quizzes for multiplayer.", { duration: 3000 });
+                toast.error("Failed to load quizzes.", { duration: 3000 });
                 console.error("Quiz fetch error:", error);
             } finally {
                 setQuizzesLoading(false);
@@ -105,12 +151,10 @@ export default function Multiplayer() {
         };
     }, [view, isRoomActionPending]); 
 
-    // --- Core Timer Logic ---
+    // --- Timer Logic ---
     const startQuestionTimer = (durationSeconds) => {
         if (qTimerIntervalRef.current) clearInterval(qTimerIntervalRef.current);
-        
         setTimeLeft(durationSeconds);
-
         qTimerIntervalRef.current = setInterval(() => {
             setTimeLeft(prev => {
                 if (prev <= 1) {
@@ -127,17 +171,19 @@ export default function Multiplayer() {
         qTimerIntervalRef.current = null;
     };
     
-    // --- Socket Listeners Setup ---
+    // --- Socket Listeners ---
     useEffect(() => {
         let countdownInterval;
-
         if (socket.connected) setIsConnected(true);
 
         const onConnect = () => {
             setIsConnected(true);
-            const { view, roomCode, user } = stateRef.current;
-            if (view === 'loading' && roomCode) {
-                 socket.emit('joinRoom', { roomCode, username: user.username });
+            const { view, roomCode, user, isGuestSetup, guestName } = stateRef.current;
+            const activeUser = user?.username || (isGuestSetup ? guestName : null);
+
+            // Re-join logic if needed
+            if (view === 'loading' && roomCode && activeUser) {
+                 socket.emit('joinRoom', { roomCode, username: activeUser });
             }
         };
 
@@ -154,7 +200,6 @@ export default function Multiplayer() {
 
         const handleLobbyUpdate = (data) => {
             setIsRoomActionPending(false); 
-            
             const { availableQuizzes } = stateRef.current;
             const quiz = availableQuizzes.find(q => String(q.id) === String(data.quizId));
             const quizTitle = quiz ? quiz.title : 'Unknown Quiz';
@@ -206,10 +251,7 @@ export default function Multiplayer() {
         
         const handleShowAnswer = (data) => {
             stopQuestionTimer();
-            setLobbyData(prev => ({
-                ...prev,
-                players: data.players
-            }));
+            setLobbyData(prev => ({ ...prev, players: data.players }));
             setQAnswer({
                 correctAnswer: data.correctAnswer,
                 explanation: data.correctExplanation,
@@ -219,19 +261,14 @@ export default function Multiplayer() {
         };
 
         const handleNextQuestion = (data) => {
-            setLobbyData(prev => ({
-                ...prev,
-                players: data.players
-            }));
+            setLobbyData(prev => ({ ...prev, players: data.players }));
             setCurrentQIndex(data.qIndex);
             setIsAnswered(false);
             setShowAnswerKey(false);
             setQAnswer(null);
             setPlayerAnswerLocal(null); 
-
             const durationSec = data.duration ? (data.duration / 1000) : 10;
             startQuestionTimer(durationSec);
-            
             toast.success(`Next Question!`, { duration: 1500 });
             setView('game');
         };
@@ -276,41 +313,39 @@ export default function Multiplayer() {
     }, []);
 
     // --- Actions ---
+    const handleGuestEntry = (e) => {
+        e.preventDefault();
+        if (!guestName.trim()) return toast.error("Please enter a name.");
+        setIsGuestSetup(true);
+        setView('menu');
+    };
+
     const handleCreateRoom = (e) => {
         e.preventDefault();
         if (!isConnected || isRoomActionPending) return toast.error("Connection or previous action pending.");
-        if (quizzesLoading || availableQuizzes.length === 0) {
-            toast.error("Please wait for quizzes to load or generate one.", { duration: 3000 });
-            return;
-        }
-
-        if (!user || !selectedQuizId) {
-            toast.error("Please select a quiz.", { duration: 3000 });
-            return;
-        }
+        if (quizzesLoading || availableQuizzes.length === 0) return toast.error("Please wait for quizzes to load.");
+        if (!currentUsername) return toast.error("Identity error. Please reload.");
+        if (!selectedQuizId) return toast.error("Please select a quiz.");
+        
         setView('loading');
         setIsRoomActionPending(true); 
-        socket.emit('createRoom', { username: user.username, quizId: selectedQuizId });
+        socket.emit('createRoom', { username: currentUsername, quizId: selectedQuizId });
     };
 
     const handleJoinRoom = (e) => {
         e.preventDefault();
         if (!isConnected || isRoomActionPending) return toast.error("Connection or previous action pending.");
-
         const code = roomCode.toUpperCase();
-        if (!user || code.length !== 4) {
-            toast.error("Invalid Room Code format.");
-            return;
-        }
+        if (!currentUsername || code.length !== 4) return toast.error("Invalid Room Code or Username.");
         
         setView('loading');
         setRoomCode(code);
         setIsRoomActionPending(true); 
-        socket.emit('joinRoom', { roomCode: code, username: user.username });
+        socket.emit('joinRoom', { roomCode: code, username: currentUsername });
     };
 
     const handleStartGame = () => {
-        if (!lobbyData || lobbyData.host !== user.username) return;
+        if (!lobbyData || lobbyData.host !== currentUsername) return;
         socket.emit('startGame', { roomCode: lobbyData.roomCode, quizId: lobbyData.quizId });
     };
 
@@ -318,15 +353,8 @@ export default function Multiplayer() {
         if (isAnswered || !lobbyData || showAnswerKey || timeLeft <= 0) return;
         setIsAnswered(true);
         setPlayerAnswerLocal(selectedOption); 
-        
         const timeTaken = (QUESTION_TIME_MS / 1000 - timeLeft) * 1000; 
-        
-        socket.emit('submitAnswer', {
-            roomCode: lobbyData.roomCode,
-            selected: selectedOption,
-            time_ms: timeTaken,
-        });
-
+        socket.emit('submitAnswer', { roomCode: lobbyData.roomCode, selected: selectedOption, time_ms: timeTaken });
         toast.success("Answer sent!", { duration: 1000 });
     };
     
@@ -341,10 +369,60 @@ export default function Multiplayer() {
         setView('menu');
     };
 
-    // --- Render Views ---
+    const copyToClipboard = (text, field) => {
+        navigator.clipboard.writeText(text);
+        setCopiedField(field);
+        toast.success("Copied to clipboard!");
+        setTimeout(() => setCopiedField(null), 2000);
+    };
+
+    // --- RENDERERS ---
+
+    // 1. Guest Entry Screen
+    const renderGuestEntry = () => (
+        <div className="flex flex-col items-center justify-center space-y-8 animate-fade-in">
+            <div className="text-center">
+                <h2 className="text-3xl font-black text-white mb-2">Welcome Player</h2>
+                <p className="text-gray-400">Join the arena to compete with friends.</p>
+            </div>
+
+            <div className="bg-gray-800 p-8 rounded-3xl border border-gray-700 w-full max-w-sm shadow-2xl">
+                <form onSubmit={handleGuestEntry} className="space-y-6">
+                    <Input 
+                        label="Enter Guest Name" 
+                        placeholder="e.g. SpeedRacer" 
+                        value={guestName} 
+                        onChange={(e) => setGuestName(e.target.value)} 
+                        className="text-center"
+                    />
+                    <Button type="submit" variant="primary" className="w-full">
+                        Continue as Guest
+                    </Button>
+                </form>
+
+                <div className="relative my-8">
+                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-700"></div></div>
+                    <div className="relative flex justify-center text-sm"><span className="px-2 bg-gray-800 text-gray-500">OR</span></div>
+                </div>
+
+                <Button onClick={() => navigate('/')} variant="outline" className="w-full">
+                    <LogIn size={18} className="mr-2" /> Login to Account
+                </Button>
+            </div>
+        </div>
+    );
+
+    // 2. Main Menu
     const renderMenu = () => (
-        <div className="space-y-6">
-            <h2 className="text-3xl font-black text-white mb-6">Multiplayer Arena</h2>
+        <div className="space-y-6 animate-fade-in">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-black text-white">Multiplayer Arena</h2>
+                <div className="flex items-center gap-2 bg-gray-800 px-3 py-1.5 rounded-full border border-gray-700">
+                    <User size={16} className="text-neon-blue" />
+                    <span className="text-sm font-bold text-white">{currentUsername}</span>
+                </div>
+            </div>
+            
             <p className="text-gray-400 mb-8">Compete against your friends in real-time quiz battles. Speed equals score!</p>
 
             <Button onClick={() => setView('create')} variant="primary" className="w-full justify-center h-16 text-lg" disabled={isRoomActionPending || quizzesLoading || availableQuizzes.length === 0 || !isConnected}>
@@ -354,127 +432,124 @@ export default function Multiplayer() {
                 <LogIn /> Join Room
             </Button>
             
-            {!isConnected && (
-                 <div className="text-center text-red-500 flex items-center justify-center gap-2">
-                    <Loader size={16} className="animate-spin" /> Establishing Connection...
-                 </div>
-            )}
-            {quizzesLoading && isConnected && (
-                 <div className="text-center text-neon-blue flex items-center justify-center gap-2">
-                    <Loader size={16} className="animate-spin" /> Loading Quizzes...
-                 </div>
-            )}
-            {availableQuizzes.length === 0 && !quizzesLoading && (
-                 <p className="text-center text-red-500 text-sm">No quizzes found. Please generate one first.</p>
-            )}
+            {!isConnected && <div className="text-center text-red-500 animate-pulse">Connecting to server...</div>}
         </div>
     );
 
+    // 3. Create Room
     const renderCreateRoom = () => (
-        <form onSubmit={handleCreateRoom} className="space-y-6">
+        <form onSubmit={handleCreateRoom} className="space-y-6 animate-fade-in">
             <h2 className="text-3xl font-black text-neon-blue mb-6">Create Room</h2>
             <p className="text-gray-400">Select the quiz material for your battle.</p>
-            
-            {quizzesLoading ? (
-                <div className="flex items-center justify-center text-gray-500 p-3 bg-gray-900 rounded-xl border border-gray-700">
-                    <Loader size={20} className="animate-spin mr-2" /> Loading...
-                </div>
-            ) : (
+            {quizzesLoading ? <div className="text-center text-neon-blue">Loading Quizzes...</div> : (
                 <>
                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Quiz Material</label>
-                    <select 
-                        value={selectedQuizId || ''} 
-                        onChange={(e) => setSelectedQuizId(e.target.value)}
-                        className="w-full bg-gray-900 border border-gray-700 rounded-xl p-3 text-sm text-white focus:border-neon-purple outline-none cursor-pointer"
-                        disabled={availableQuizzes.length === 0}
-                    >
+                    <select value={selectedQuizId || ''} onChange={(e) => setSelectedQuizId(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-xl p-3 text-sm text-white focus:border-neon-purple outline-none cursor-pointer">
                         {availableQuizzes.map(quiz => (
-                            <option key={quiz.id} value={String(quiz.id)} className="bg-gray-900">
-                                {quiz.title} ({quiz.difficulty})
-                            </option>
+                            <option key={quiz.id} value={String(quiz.id)}>{quiz.title} ({quiz.difficulty})</option>
                         ))}
                     </select>
                 </>
             )}
-
-            <Button type="submit" variant="success" className="w-full justify-center" disabled={isRoomActionPending || quizzesLoading || availableQuizzes.length === 0}>
-                Create & Start Lobby
-            </Button>
-            <Button type="button" onClick={() => setView('menu')} variant="outline" className="w-full justify-center" disabled={isRoomActionPending}>
-                Back to Menu
-            </Button>
+            <Button type="submit" variant="success" className="w-full justify-center" disabled={isRoomActionPending}>Create & Start Lobby</Button>
+            <Button type="button" onClick={() => setView('menu')} variant="outline" className="w-full justify-center" disabled={isRoomActionPending}>Back</Button>
         </form>
     );
 
+    // 4. Join Room
     const renderJoinRoom = () => (
-        <form onSubmit={handleJoinRoom} className="space-y-6">
+        <form onSubmit={handleJoinRoom} className="space-y-6 animate-fade-in">
             <h2 className="text-3xl font-black text-neon-blue mb-6">Join Room</h2>
-            <p className="text-gray-400">Enter the 4-digit room code.</p>
-            
-            <Input 
-                label="Room Code"
-                type="text"
-                placeholder="A3B4"
-                value={roomCode}
-                onChange={e => setRoomCode(e.target.value.toUpperCase())}
-                maxLength={4}
-                className="text-center text-xl font-mono uppercase"
-            />
-
-            <Button type="submit" variant="primary" className="w-full justify-center" disabled={isRoomActionPending}>
-                Join Game
-            </Button>
-            <Button type="button" onClick={() => setView('menu')} variant="outline" className="w-full justify-center" disabled={isRoomActionPending}>
-                Back to Menu
-            </Button>
+            <Input label="Room Code" type="text" placeholder="A3B4" value={roomCode} onChange={e => setRoomCode(e.target.value.toUpperCase())} maxLength={4} className="text-center text-xl font-mono uppercase" />
+            <Button type="submit" variant="primary" className="w-full justify-center" disabled={isRoomActionPending}>Join Game</Button>
+            <Button type="button" onClick={() => setView('menu')} variant="outline" className="w-full justify-center" disabled={isRoomActionPending}>Back</Button>
         </form>
     );
 
+    // 5. Lobby
     const renderLobby = () => {
         if (!lobbyData) return renderMenu();
-        let players = lobbyData.players || [];
+        const players = lobbyData.players || [];
+        const inviteLink = `${window.location.origin}/multiplayer?code=${lobbyData.roomCode}`;
+
         return (
-            <div className="space-y-6">
-                <h2 className="text-4xl font-black text-neon-green">ROOM: {lobbyData.roomCode}</h2>
-                <p className="text-gray-400 flex items-center gap-2">
-                    <Users size={20} className="text-neon-blue" />
-                    Quiz: <span className="text-white font-bold">{lobbyData.quizTitle || 'Loading...'}</span>
-                </p>
-                <div className="bg-gray-900 p-6 rounded-2xl border border-gray-700 space-y-3">
-                    <h3 className="text-sm font-bold uppercase text-gray-500 tracking-wider">Players ({players.length})</h3>
-                    {players.map(player => (
-                        <div key={player.username} className="flex justify-between items-center text-white">
-                            <span>{player.username}</span>
-                            {player.isHost && <span className="text-xs text-neon-purple font-bold">HOST</span>}
-                            {player.username === user.username && <span className="text-xs text-neon-green font-bold">YOU</span>}
-                        </div>
-                    ))}
+            <div className="space-y-6 animate-fade-in">
+                <div className="flex flex-col items-center border-b border-gray-800 pb-6">
+                    <span className="text-xs font-bold text-neon-blue uppercase tracking-widest mb-2">Lobby Ready</span>
+                    <h2 className="text-3xl md:text-4xl font-black text-white">{lobbyData.quizTitle}</h2>
                 </div>
-                {lobbyData.host === user.username ? (
-                    <Button onClick={handleStartGame} variant="success" className="w-full justify-center">
-                        Start Game (Host Only)
-                    </Button>
-                ) : (
-                    <p className="text-center text-neon-blue font-bold p-2 bg-gray-900 rounded-lg border border-gray-700">Waiting for Host to Start...</p>
-                )}
-                <div className="p-4 bg-gray-800 rounded-xl border border-gray-700 text-center">
-                    <p className="text-gray-400 text-xs mb-2">Share this code to invite friends:</p>
-                    <div className="text-2xl font-mono text-neon-green font-bold flex items-center justify-center gap-3">
-                        <QrCode size={24} className="text-neon-green" /> {lobbyData.roomCode}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Left: Player List */}
+                    <div className="bg-gray-900/50 p-4 rounded-2xl border border-gray-700">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                                <Users size={16} /> Players ({players.length})
+                            </h3>
+                            {lobbyData.host === currentUsername && (
+                                <span className="text-xs bg-neon-purple/20 text-neon-purple px-2 py-0.5 rounded-full border border-neon-purple/50">You are Host</span>
+                            )}
+                        </div>
+                        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                            {players.map(player => (
+                                <div key={player.username} className="flex justify-between items-center p-3 bg-gray-800 rounded-xl border border-gray-700/50">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-2 h-2 rounded-full ${player.isHost ? 'bg-neon-purple' : 'bg-neon-green'} animate-pulse`}></div>
+                                        <span className="text-white font-medium">{player.username}</span>
+                                    </div>
+                                    {player.username === currentUsername && <span className="text-xs text-gray-500 font-bold">YOU</span>}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Right: Invite Options */}
+                    <div className="bg-gray-900/50 p-4 rounded-2xl border border-gray-700 flex flex-col items-center text-center space-y-6">
+                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                            <Share2 size={16} /> Invite Friends
+                        </h3>
+                        <div className="p-3 bg-white rounded-xl shadow-lg">
+                             <QRCodeSVG value={inviteLink} size={120} level={"H"} />
+                        </div>
+                        <div className="w-full space-y-3">
+                            <div className="flex items-center gap-2 bg-black/40 p-1.5 pr-3 rounded-xl border border-gray-700">
+                                <div className="bg-gray-800 px-3 py-2 rounded-lg text-neon-green font-mono font-bold text-xl tracking-widest border border-gray-700">
+                                    {lobbyData.roomCode}
+                                </div>
+                                <div className="flex-1 text-left text-xs text-gray-500 font-medium">Room Code</div>
+                                <button onClick={() => copyToClipboard(lobbyData.roomCode, 'code')} className="text-gray-400 hover:text-white p-2">
+                                    {copiedField === 'code' ? <CheckCircle size={20} className="text-green-500" /> : <Copy size={20} />}
+                                </button>
+                            </div>
+                            <div className="flex items-center gap-2 bg-black/40 p-2 rounded-xl border border-gray-700 cursor-pointer" onClick={() => copyToClipboard(inviteLink, 'link')}>
+                                <div className="bg-gray-800 p-2 rounded-lg text-neon-blue border border-gray-700"><LinkIcon size={18} /></div>
+                                <div className="flex-1 text-left">
+                                    <div className="text-xs text-gray-500 font-medium">Direct Link</div>
+                                    <div className="text-xs text-gray-400 truncate max-w-[120px]">{inviteLink}</div>
+                                </div>
+                                <button className="text-gray-400 hover:text-white p-2">
+                                    {copiedField === 'link' ? <CheckCircle size={20} className="text-green-500" /> : <Copy size={20} />}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <Button type="button" onClick={leaveRoom} variant="outline" className="w-full justify-center">
-                    Leave Room
-                </Button>
+
+                <div className="pt-4 border-t border-gray-800 flex flex-col gap-3">
+                    {lobbyData.host === currentUsername ? (
+                        <Button onClick={handleStartGame} variant="success" className="w-full justify-center h-14 text-lg">Start Game</Button>
+                    ) : (
+                        <div className="w-full py-4 text-center bg-gray-900 rounded-xl border border-gray-700 text-neon-blue font-bold animate-pulse">Waiting for Host to Start...</div>
+                    )}
+                    <Button type="button" onClick={leaveRoom} variant="ghost" className="w-full justify-center text-red-500 hover:bg-red-500/10">Leave Room</Button>
+                </div>
             </div>
         );
     };
 
-    // --- REDESIGNED COUNTDOWN START ---
+    // 6. Countdown
     const renderCountdown = () => {
         if (!lobbyData) return renderMenu();
-
-        // Determine color based on time left
         let colorClass = "text-white";
         if (countdown === 3) colorClass = "text-red-500";
         if (countdown === 2) colorClass = "text-orange-500";
@@ -483,51 +558,37 @@ export default function Multiplayer() {
 
         return (
             <div className="flex flex-col items-center justify-center min-h-[50vh] animate-fade-in py-10">
-                <h3 className="text-gray-500 font-bold uppercase tracking-[0.5em] mb-12 animate-pulse">
-                    Get Ready
-                </h3>
-                
+                <h3 className="text-gray-500 font-bold uppercase tracking-[0.5em] mb-12 animate-pulse">Get Ready</h3>
                 <div className="relative flex items-center justify-center">
-                    {/* Glowing Background Ring */}
                     <div className={`absolute w-64 h-64 rounded-full blur-3xl opacity-20 transition-colors duration-300 ${colorClass.replace('text-', 'bg-')}`}></div>
-                    
-                    {/* The Number */}
                     <span className={`text-[12rem] font-mono font-black leading-none transition-all duration-300 transform scale-100 ${colorClass} drop-shadow-2xl`}>
                         {countdown > 0 ? countdown : 'GO!'}
                     </span>
                 </div>
-
                 <div className="mt-16 text-center space-y-3">
                     <span className="text-neon-blue text-sm font-bold uppercase tracking-wider bg-neon-blue/10 px-3 py-1 rounded-full">Next Up</span>
-                    <h2 className="text-2xl md:text-3xl font-black text-white max-w-lg leading-tight">
-                        {lobbyData.quizTitle}
-                    </h2>
+                    <h2 className="text-2xl md:text-3xl font-black text-white max-w-lg leading-tight">{lobbyData.quizTitle}</h2>
                 </div>
             </div>
         );
     };
-    // --- REDESIGNED COUNTDOWN END ---
 
+    // 7. Game Board
     const renderGame = () => {
         if (!gameQuestions || !lobbyData) return renderMenu();
         const q = gameQuestions[currentQIndex];
-        const player = lobbyData.players.find(p => p.username === user.username);
+        const player = lobbyData.players.find(p => p.username === currentUsername);
         const playerAnswer = playerAnswerLocal;
         
         return (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-fade-in">
                 <div className="flex justify-between items-center pb-4 border-b border-gray-800">
-                    <h3 className="text-xl font-mono text-gray-400">
-                        Q<span className="text-white font-bold">{currentQIndex + 1}</span>/{gameQuestions.length}
-                    </h3>
+                    <h3 className="text-xl font-mono text-gray-400">Q<span className="text-white font-bold">{currentQIndex + 1}</span>/{gameQuestions.length}</h3>
                     <div className="flex items-center gap-4 text-white">
                         <span className={`font-bold flex items-center gap-1.5 leading-none ${timeLeft <= 3 ? 'text-red-500 animate-pulse' : 'text-neon-blue'}`}>
                             <Clock size={18} className="mb-px" /> {timeLeft > 0 ? timeLeft : 0}s
                         </span>
-                        
-                        <span className="text-neon-green font-bold flex items-center gap-1">
-                            <Zap size={18} /> {player.score}
-                        </span>
+                        <span className="text-neon-green font-bold flex items-center gap-1"><Zap size={18} /> {player?.score || 0}</span>
                     </div>
                 </div>
                 <h2 className="text-2xl font-bold text-white leading-relaxed">{q.question}</h2>
@@ -550,15 +611,8 @@ export default function Multiplayer() {
                             icon = <CheckCircle size={20} />;
                         }
                         return (
-                            <Button 
-                                key={idx}
-                                onClick={() => handleGameAnswer(opt)}
-                                disabled={isAnswered || timeLeft <= 0}
-                                variant="game"
-                                className={`text-left justify-between ${buttonClass}`}
-                            >
-                                {opt}
-                                {icon}
+                            <Button key={idx} onClick={() => handleGameAnswer(opt)} disabled={isAnswered || timeLeft <= 0} variant="game" className={`text-left justify-between ${buttonClass}`}>
+                                {opt} {icon}
                             </Button>
                         );
                     })}
@@ -566,43 +620,27 @@ export default function Multiplayer() {
                 {showAnswerKey && (
                     <div className="mt-8 pt-4 border-t border-gray-800 animate-fade-in">
                         <div className="flex items-center justify-between text-lg font-bold">
-                            <span className="flex items-center gap-2 text-neon-blue">
-                                <AlertCircle size={18} /> Explanation
-                            </span>
-                            <span className={`text-sm ${player.lastScore > 0 ? 'text-neon-green' : 'text-red-500'}`}>
-                                Score: {player.lastScore > 0 ? `+${player.lastScore}` : 0}
-                            </span>
+                            <span className="flex items-center gap-2 text-neon-blue"><AlertCircle size={18} /> Explanation</span>
+                            <span className={`text-sm ${player?.lastScore > 0 ? 'text-neon-green' : 'text-red-500'}`}>Score: {player?.lastScore > 0 ? `+${player.lastScore}` : 0}</span>
                         </div>
                         <p className="text-gray-400 text-sm mt-2 leading-relaxed">{qAnswer.explanation}</p>
                     </div>
                 )}
                 <div className="pt-4 text-center">
-                    <p className="text-sm text-gray-500">
-                        {isAnswered && !showAnswerKey ? 'Waiting for results...' : 
-                         showAnswerKey ? `Next question in ${ANSWER_REVEAL_DELAY_MS / 1000} seconds.` : 'Answer quickly!'}
-                    </p>
+                    <p className="text-sm text-gray-500">{isAnswered && !showAnswerKey ? 'Waiting for results...' : showAnswerKey ? `Next question in ${ANSWER_REVEAL_DELAY_MS / 1000} seconds.` : 'Answer quickly!'}</p>
                 </div>
             </div>
         );
     };
 
+    // 8. Results
     const renderResults = () => {
         if (!playerRanking || !lobbyData) return renderMenu();
         return (
-            <div className="space-y-6 text-center relative">
-                 {/* --- FIXED CONFETTI DESIGN START --- */}
-                 {/* Placed inside a fixed container to ensure full screen coverage regardless of scroll/position */}
+            <div className="space-y-6 text-center relative animate-fade-in">
                  <div className="fixed inset-0 z-50 pointer-events-none">
-                     <Confetti 
-                        width={windowSize.width} 
-                        height={windowSize.height} 
-                        recycle={false} 
-                        numberOfPieces={800} 
-                        gravity={0.2}
-                     />
+                     <Confetti width={windowSize.width} height={windowSize.height} recycle={false} numberOfPieces={800} gravity={0.2} />
                  </div>
-                 {/* --- FIXED CONFETTI DESIGN END --- */}
-
                 <Trophy size={60} className="text-neon-yellow mx-auto" />
                 <h2 className="text-4xl font-black text-white">Final Ranking</h2>
                 <p className="text-gray-400">Quiz: {lobbyData.quizTitle}</p>
@@ -610,7 +648,7 @@ export default function Multiplayer() {
                     {playerRanking.map((p, index) => (
                         <div key={p.username} className={`p-3 rounded-lg flex justify-between items-center font-bold ${
                             index === 0 ? 'bg-neon-green/20 border-neon-green text-neon-green' : 
-                            p.username === user.username ? 'bg-neon-blue/20 border-neon-blue text-white' : 
+                            p.username === currentUsername ? 'bg-neon-blue/20 border-neon-blue text-white' : 
                             'bg-gray-800 text-gray-300'
                         }`}>
                             <span className="w-1/12">{index + 1}</span>
@@ -619,13 +657,12 @@ export default function Multiplayer() {
                         </div>
                     ))}
                 </div>
-                <Button onClick={leaveRoom} variant="primary" className="w-full justify-center">
-                    Return to Menu
-                </Button>
+                <Button onClick={leaveRoom} variant="primary" className="w-full justify-center">Return to Menu</Button>
             </div>
         );
     };
     
+    // 9. Loading
     const renderLoading = () => (
         <div className="text-center text-neon-blue flex flex-col items-center justify-center space-y-4 h-64">
             <Loader size={48} className="animate-spin" /> 
@@ -636,6 +673,7 @@ export default function Multiplayer() {
 
     const renderContent = () => {
         switch (view) {
+            case 'guest_entry': return renderGuestEntry();
             case 'create': return renderCreateRoom();
             case 'join': return renderJoinRoom();
             case 'lobby': return renderLobby();
@@ -649,7 +687,7 @@ export default function Multiplayer() {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-dark-bg p-4 animate-fade-in">
-            <div className="bg-dark-surface p-8 rounded-3xl border border-gray-800 w-full max-w-md shadow-2xl">
+            <div className="bg-dark-surface p-8 rounded-3xl border border-gray-800 w-full max-w-4xl shadow-2xl">
                 {renderContent()}
             </div>
         </div>
