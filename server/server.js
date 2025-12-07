@@ -345,7 +345,7 @@ app.use(express.static(path.join(__dirname, "../client/dist")));
 // 2. SPA Fallback (Wildcard Route)
 // This catches any GET request that wasn't an API call, Socket call, or Static File.
 // It serves index.html so React Router can take over.
-app.get('*', (req, res) => {
+app.get('(.*)', (req, res) => {
     // Safety check: If the browser is asking for an API/Socket route that doesn't exist,
     // return a JSON 404 instead of the HTML page.
     if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
