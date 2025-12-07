@@ -4,15 +4,33 @@ import api from '../utils/api';
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  // 1. Initialize from LocalStorage to persist state immediately on reload
+  const [user, setUser] = useState(() => {
+    try {
+      const storedUser = localStorage.getItem('user');
+      return storedUser ? JSON.parse(storedUser) : null;
+    } catch (error) {
+      console.error("Error parsing stored user:", error);
+      return null;
+    }
+  });
+
   const [loading, setLoading] = useState(true);
 
   const refreshUser = async () => {
     try {
       const { data } = await api.get('/auth/me');
       setUser(data);
+      // 2. Keep LocalStorage in sync with server data (hearts/xp changes)
+      localStorage.setItem('user', JSON.stringify(data));
     } catch (error) {
       console.error("Failed to refresh user:", error);
+      // If unauthorized, api interceptor handles redirect, but we clear state here
+      if (error.response && error.response.status === 401) {
+         localStorage.removeItem('token');
+         localStorage.removeItem('user');
+         setUser(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -47,4 +65,5 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);
