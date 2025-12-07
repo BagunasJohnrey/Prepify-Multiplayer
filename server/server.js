@@ -331,18 +331,15 @@ io.on('connection', (socket) => {
     });
 });
 
-// ----------------------------------------------------
-// FIX 3: SPA Fallback Route (Express 5 Compatible)
-// Replaced '(.*)' with '/:path*' to fix "Missing parameter name" error.
-// This matches any route not previously handled and serves index.html.
-app.get('/:path*', (req, res) => {
+// SPA Fallback Route (Express 5 Compatible)
+// This route catches all unmatched routes and serves the React app's index.html
+app.get('*', (req, res) => {
     // Safety check: ensure we don't accidentally intercept API calls
-    if (req.originalUrl.startsWith('/api')) {
-        return res.status(404).json({ error: "API endpoint not found" });
+    if (req.originalUrl.startsWith('/api') || req.originalUrl.startsWith('/socket.io')) {
+        return res.status(404).json({ error: "Endpoint not found" });
     }
     res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });
-// ----------------------------------------------------
 
 // Self-ping function to keep Render instance awake
 const RENDER_HOSTNAME = process.env.RENDER_EXTERNAL_HOSTNAME || 'localhost';
