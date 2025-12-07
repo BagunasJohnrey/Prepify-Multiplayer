@@ -320,9 +320,15 @@ export default function Multiplayer() {
         toast.success("Answer sent!", { duration: 1000 });
     };
     
+    // --- UPDATED leaveRoom FUNCTION ---
     const leaveRoom = () => {
         if (lobbyData) {
-            socket.emit('leaveRoom', { roomCode: lobbyData.roomCode }); 
+            socket.emit('leaveRoom', { roomCode: lobbyData.roomCode });
+            
+            // FIX: Manually clear the ref immediately so onDisconnect doesn't trigger the toast
+            // This tricks the listener into thinking we're already out of the lobby
+            stateRef.current.lobbyData = null; 
+
             socket.disconnect(); 
             socket.connect(); 
         }
