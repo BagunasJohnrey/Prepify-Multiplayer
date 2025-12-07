@@ -165,7 +165,6 @@ export default function Multiplayer() {
         const handlePlayerAnswered = (data) => {
             const { currentQIndex } = stateRef.current;
             if (data.qIndex === currentQIndex) {
-                 // FIX: Removed broken icon property
                  toast(`${data.username} submitted an answer!`);
             }
         };
@@ -182,7 +181,6 @@ export default function Multiplayer() {
             setCountdown(timeLeft);
             setView('countdown');
             
-            // Clear any existing interval before starting a new one
             if (countdownInterval) clearInterval(countdownInterval);
 
             countdownInterval = setInterval(() => {
@@ -265,7 +263,7 @@ export default function Multiplayer() {
             if (countdownInterval) clearInterval(countdownInterval);
             stopQuestionTimer();
         };
-    }, []); // FIXED: Empty dependency array ensures timers survive re-renders
+    }, []);
 
     // --- Actions ---
     const handleCreateRoom = (e) => {
@@ -461,19 +459,40 @@ export default function Multiplayer() {
         );
     };
 
+    // --- REVISED UI FOR COUNTDOWN ---
     const renderCountdown = () => {
         if (!lobbyData) return renderMenu();
+
         return (
-            <div className="text-center space-y-8 animate-pulse">
-                <h2 className="text-6xl font-black text-white mb-4">Game Starting In...</h2>
-                <div className="flex items-center justify-center">
-                    <div className="text-neon-green text-9xl font-mono font-bold relative">
+            <div className="text-center py-6 animate-fade-in">
+                <h2 className="text-4xl md:text-5xl font-black text-white mb-12">
+                    Game Starting...
+                </h2>
+                
+                <div className="relative inline-block mb-12">
+                    {/* Glowing Effect */}
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-neon-green/20 rounded-full blur-2xl animate-pulse"></div>
+                    
+                    {/* Number */}
+                    <span className="relative z-10 text-9xl font-mono font-black text-neon-green drop-shadow-[0_0_10px_rgba(57,255,20,0.5)]">
                         {countdown > 0 ? countdown : 'GO!'}
-                        <Clock size={40} className="absolute top-0 right-0 text-white opacity-50"/>
-                    </div>
+                    </span>
+
+                    {/* Icon - Adjusted position to not overlap */}
+                    <Clock 
+                        size={40} 
+                        className="absolute -top-6 -right-8 text-gray-500/50 rotate-12" 
+                    />
                 </div>
-                <p className="text-xl text-neon-blue font-bold">{lobbyData.quizTitle}</p>
-                <p className="text-gray-400">Get Ready to Answer!</p>
+
+                <div className="space-y-2">
+                    <h3 className="text-2xl text-neon-blue font-bold px-4">
+                        {lobbyData.quizTitle}
+                    </h3>
+                    <p className="text-gray-500 text-sm font-bold uppercase tracking-[0.2em]">
+                        Get Ready to Answer
+                    </p>
+                </div>
             </div>
         );
     };
