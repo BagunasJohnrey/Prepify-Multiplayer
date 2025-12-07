@@ -37,9 +37,9 @@ const io = new SocketIOServer(httpServer, {
 });
 
 // ----------------------------------------------------
-// FIX 1: Explicit Socket.IO Health Check/Handshake Route
-// This ensures Vercel/Express doesn't 404 the initial polling request
-// before the upgrade happens.
+// FIX 1: Explicit Socket.IO Polling/Health Check Route
+// This ensures Express doesn't 404 the initial polling request
+// during the handshake on Vercel/Render.
 app.get('/socket.io/', (req, res) => {
     res.status(200).send('Socket.IO health check successful.');
 });
@@ -266,7 +266,7 @@ io.on('connection', (socket) => {
 
                 const qStartTime = Date.now();
                 const qDeadline = qStartTime + QUESTION_TIME_MS;
-                
+
                 currentRoomState.qTimeout = setTimeout(() => {
                     advanceGame(roomCode, currentRoomState);
                 }, QUESTION_TIME_MS);

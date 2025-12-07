@@ -13,7 +13,7 @@ const API_BASE_URL = API_BASE_URL_RAW.endsWith('/')
     : API_BASE_URL_RAW;
 
 const socket = io(API_BASE_URL, {
-    // path: '/socket.io/', // REMOVED: This is now handled by explicit configuration in server/server.js and Vercel routing
+    // path: '/socket.io/', // REMOVED: Rely on server/vercel configuration for path
     
     // Prioritize native WebSockets on Render, fallback to polling
     transports: ['websocket', 'polling'], 
@@ -21,8 +21,8 @@ const socket = io(API_BASE_URL, {
     forceNew: true,
     withCredentials: false,
     
-    // Increased timeout for cold start tolerance (60 seconds)
-    timeout: 60000, 
+    // CHANGED: Reduced timeout for faster failure/retry
+    timeout: 15000, 
     reconnectionAttempts: 10 
 });
 
