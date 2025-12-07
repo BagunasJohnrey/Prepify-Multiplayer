@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'; 
-import { Users, PlusCircle, LogIn, QrCode, Loader, Clock, Trophy, Zap, Heart, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { Users, PlusCircle, LogIn, QrCode, Loader, Clock, Trophy, Zap, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -30,7 +30,6 @@ export default function Multiplayer() {
     
     // Timer State
     const [timeLeft, setTimeLeft] = useState(QUESTION_TIME_MS / 1000);
-    const qDeadlineRef = useRef(0); 
     const qTimerIntervalRef = useRef(null); 
     const roomActionTimeoutRef = useRef(null); 
     const [playerAnswerLocal, setPlayerAnswerLocal] = useState(null); 
@@ -39,7 +38,7 @@ export default function Multiplayer() {
     const [quizzesLoading, setQuizzesLoading] = useState(true);
     const [selectedQuizId, setSelectedQuizId] = useState(null);
 
-    // --- State Ref Pattern (Fixes Timer/Socket Re-render issues) ---
+    // --- State Ref Pattern ---
     const stateRef = useRef({
         availableQuizzes,
         currentQIndex,
@@ -95,21 +94,23 @@ export default function Multiplayer() {
         };
     }, [view, isRoomActionPending]); 
 
-    // --- Core Timer Logic ---
-    const startQuestionTimer = (deadline) => {
+    // --- CHANGED: Core Timer Logic (Duration Based) ---
+    // Instead of calculating Date.now() differences (which causes drift),
+    // we simply count down seconds locally from the duration provided.
+    const startQuestionTimer = (durationSeconds) => {
         if (qTimerIntervalRef.current) clearInterval(qTimerIntervalRef.current);
-        qDeadlineRef.current = deadline;
-
-        setTimeLeft(Math.floor((deadline - Date.now()) / 1000));
+        
+        setTimeLeft(durationSeconds);
 
         qTimerIntervalRef.current = setInterval(() => {
-            const timeRemaining = Math.ceil((qDeadlineRef.current - Date.now()) / 1000);
-            setTimeLeft(Math.max(0, timeRemaining));
-
-            if (timeRemaining <= 0) {
-                clearInterval(qTimerIntervalRef.current);
-            }
-        }, 100); 
+            setTimeLeft(prev => {
+                if (prev <= 1) {
+                    clearInterval(qTimerIntervalRef.current);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000); 
     };
 
     const stopQuestionTimer = () => {
@@ -177,20 +178,20 @@ export default function Multiplayer() {
             setPlayerAnswerLocal(null); 
             setLobbyData(prev => ({...prev, quizTitle: data.quizTitle}));
             
-            let timeLeft = Math.floor((data.startTimestamp - Date.now()) / 1000);
-            setCountdown(timeLeft);
+            // --- CHANGED: Use duration instead of timestamps ---
+            const durationSec = data.duration ? (data.duration / 1000) : COUNTDOWN_SECONDS;
+            setCountdown(durationSec);
             setView('countdown');
             
             if (countdownInterval) clearInterval(countdownInterval);
 
             countdownInterval = setInterval(() => {
                 setCountdown(c => {
-                    const newCount = c - 1;
-                    if (newCount <= 0) {
+                    if (c <= 1) {
                         clearInterval(countdownInterval);
                         return 0;
                     }
-                    return newCount;
+                    return c - 1;
                 });
             }, 1000);
         };
@@ -220,7 +221,9 @@ export default function Multiplayer() {
             setQAnswer(null);
             setPlayerAnswerLocal(null); 
 
-            startQuestionTimer(data.qDeadline);
+            // --- CHANGED: Use duration instead of deadline ---
+            const durationSec = data.duration ? (data.duration / 1000) : 10;
+            startQuestionTimer(durationSec);
             
             toast.success(`Next Question!`, { duration: 1500 });
             setView('game');
@@ -309,7 +312,8 @@ export default function Multiplayer() {
         setIsAnswered(true);
         setPlayerAnswerLocal(selectedOption); 
         
-        const timeTaken = QUESTION_TIME_MS - Math.max(0, qDeadlineRef.current - Date.now());
+        // Calculate rough time taken (inverse of current countdown)
+        const timeTaken = (QUESTION_TIME_MS / 1000 - timeLeft) * 1000; 
         
         socket.emit('submitAnswer', {
             roomCode: lobbyData.roomCode,
@@ -320,15 +324,10 @@ export default function Multiplayer() {
         toast.success("Answer sent!", { duration: 1000 });
     };
     
-    // --- UPDATED leaveRoom FUNCTION ---
     const leaveRoom = () => {
         if (lobbyData) {
             socket.emit('leaveRoom', { roomCode: lobbyData.roomCode });
-            
-            // FIX: Manually clear the ref immediately so onDisconnect doesn't trigger the toast
-            // This tricks the listener into thinking we're already out of the lobby
             stateRef.current.lobbyData = null; 
-
             socket.disconnect(); 
             socket.connect(); 
         }
@@ -465,7 +464,6 @@ export default function Multiplayer() {
         );
     };
 
-    // --- REVISED UI FOR COUNTDOWN ---
     const renderCountdown = () => {
         if (!lobbyData) return renderMenu();
 
@@ -476,28 +474,16 @@ export default function Multiplayer() {
                 </h2>
                 
                 <div className="relative inline-block mb-12">
-                    {/* Glowing Effect */}
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-neon-green/20 rounded-full blur-2xl animate-pulse"></div>
-                    
-                    {/* Number */}
                     <span className="relative z-10 text-9xl font-mono font-black text-neon-green drop-shadow-[0_0_10px_rgba(57,255,20,0.5)]">
                         {countdown > 0 ? countdown : 'GO!'}
                     </span>
-
-                    {/* Icon - Adjusted position to not overlap */}
-                    <Clock 
-                        size={40} 
-                        className="absolute -top-6 -right-8 text-gray-500/50 rotate-12" 
-                    />
+                    <Clock size={40} className="absolute -top-6 -right-8 text-gray-500/50 rotate-12" />
                 </div>
 
                 <div className="space-y-2">
-                    <h3 className="text-2xl text-neon-blue font-bold px-4">
-                        {lobbyData.quizTitle}
-                    </h3>
-                    <p className="text-gray-500 text-sm font-bold uppercase tracking-[0.2em]">
-                        Get Ready to Answer
-                    </p>
+                    <h3 className="text-2xl text-neon-blue font-bold px-4">{lobbyData.quizTitle}</h3>
+                    <p className="text-gray-500 text-sm font-bold uppercase tracking-[0.2em]">Get Ready to Answer</p>
                 </div>
             </div>
         );

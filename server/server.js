@@ -67,12 +67,6 @@ app.use("/api/generate", generateLimiter);
 
 app.use(express.json());
 
-// Serve Static Frontend Files
-// MOVED: We now serve static files explicitly using express.static before the API routes or alongside them
-// This line below was in your original code, keep it here or merge with the fix below.
-// For clarity, I will rely on the robust static serving in the fix section at the bottom.
-// app.use(express.static(path.join(__dirname, "../client/dist"))); 
-
 app.use("/api/auth", authRoutes); 
 app.use("/api", quizRoutes);      
 
@@ -170,7 +164,8 @@ const advanceGame = (roomCode, roomState) => {
                 question: currentRoomState.quizData[currentRoomState.currentQ],
                 players: currentRoomState.players,
                 qStartTime: qStartTime,
-                qDeadline: qDeadline
+                qDeadline: qDeadline,
+                duration: QUESTION_TIME_MS // <--- CHANGED: Send duration for sync
             });
         }, ANSWER_REVEAL_DELAY_MS);
     }
@@ -249,11 +244,11 @@ io.on('connection', (socket) => {
             
             roomState.currentQ = 0;
             
-            const startTimestamp = Date.now() + 5000; 
+            // --- CHANGED: Removed startTimestamp, added duration ---
             
             io.to(roomCode).emit('startCountdown', { 
                 quizTitle: quiz.title,
-                startTimestamp,
+                duration: 5000, // <--- CHANGED: Send 5s duration
                 quizData: roomState.quizData
             });
 
@@ -273,7 +268,8 @@ io.on('connection', (socket) => {
                     question: currentRoomState.quizData[currentRoomState.currentQ],
                     players: currentRoomState.players,
                     qStartTime: qStartTime,
-                    qDeadline: qDeadline
+                    qDeadline: qDeadline,
+                    duration: QUESTION_TIME_MS // <--- CHANGED: Send duration
                 });
             }, 5000); 
             
@@ -335,19 +331,15 @@ io.on('connection', (socket) => {
 });
 
 // ==========================================
-// SPA ROUTING FIX (UPDATED SECTION)
+// SPA ROUTING FIX
 // ==========================================
 
-// 1. Serve Static Assets (JS, CSS, Images)
-// This ensures that physical files are served immediately.
+// 1. Serve Static Assets
 app.use(express.static(path.join(__dirname, "../client/dist")));
 
-// 2. SPA Fallback (Wildcard Route)
-// This catches any GET request that wasn't an API call, Socket call, or Static File.
-// It serves index.html so React Router can take over.
+// 2. SPA Fallback (Wildcard Regex Route for Express 5+)
 app.get(/.*/, (req, res) => {
-    // Safety check: If the browser is asking for an API/Socket route that doesn't exist,
-    // return a JSON 404 instead of the HTML page.
+    // Safety check: Don't serve HTML for API/Socket requests
     if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
         return res.status(404).json({ error: 'API route not found' });
     }
@@ -356,35 +348,20 @@ app.get(/.*/, (req, res) => {
     res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });
 
-// ==========================================
-// END FIX
-// ==========================================
-
-// Self-ping function to keep Render instance awake
+// Self-ping function
 const RENDER_HOSTNAME = process.env.RENDER_EXTERNAL_HOSTNAME || 'localhost';
 const PING_URL = `https://${RENDER_HOSTNAME}`;
-const PING_INTERVAL = 600000; // 10 minutes
+const PING_INTERVAL = 600000; 
 
 function selfPing() {
-    if (RENDER_HOSTNAME === 'localhost' || RENDER_HOSTNAME === undefined) {
-        return;
-    }
-    
-    fetch(PING_URL + '/api/quizzes', { 
-        headers: { 'User-Agent': 'Render-Self-Pinger' }
-    })
-        .then(response => {
-            console.log(`Self-ping successful: Status ${response.status}`);
-        })
-        .catch(err => {
-            console.error(`Self-ping failed: ${err.message}`);
-        });
+    if (RENDER_HOSTNAME === 'localhost' || RENDER_HOSTNAME === undefined) return;
+    fetch(PING_URL + '/api/quizzes', { headers: { 'User-Agent': 'Render-Self-Pinger' } })
+        .then(response => console.log(`Self-ping successful: Status ${response.status}`))
+        .catch(err => console.error(`Self-ping failed: ${err.message}`));
 }
 
-// Bind to '0.0.0.0' and the PORT env variable
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Prepify Server running on port ${PORT}`);
-
   if (RENDER_HOSTNAME !== 'localhost' && RENDER_HOSTNAME !== undefined) {
       console.log(`Self-ping scheduled every ${PING_INTERVAL / 60000} minutes to ${PING_URL}`);
       setInterval(selfPing, PING_INTERVAL);
