@@ -332,13 +332,25 @@ io.on('connection', (socket) => {
 });
 
 // SPA Fallback Route (Express 5 Compatible)
-// This route catches all unmatched routes and serves the React app's index.html
-app.get('*', (req, res) => {
-    // Safety check: ensure we don't accidentally intercept API calls
-    if (req.originalUrl.startsWith('/api') || req.originalUrl.startsWith('/socket.io')) {
-        return res.status(404).json({ error: "Endpoint not found" });
+// IMPORTANT: This must be the LAST route defined
+// Catches all GET requests that haven't matched any other routes
+app.use((req, res, next) => {
+    // Only handle GET requests for HTML
+    if (req.method !== 'GET') {
+        return next();
     }
-    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+    
+    // Don't intercept API or Socket.IO routes
+    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+        return next();
+    }
+    
+    // Serve the React app for all other routes
+    res.sendFile(path.join(__dirname, '../client/dist/index.html'), (err) => {
+        if (err) {
+            res.status(500).send('Error loading application');
+        }
+    });
 });
 
 // Self-ping function to keep Render instance awake
