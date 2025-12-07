@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'; 
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Users, PlusCircle, LogIn, QrCode, Loader, Clock, Trophy, Zap, AlertCircle, CheckCircle, XCircle, Copy, Link as LinkIcon, Share2, User, KeyRound, ArrowRight, UserPlus, ArrowLeft } from 'lucide-react';
+import { Users, PlusCircle, LogIn, Loader, Clock, Trophy, Zap, AlertCircle, CheckCircle, XCircle, Copy, Link as LinkIcon, Share2, User, KeyRound, ArrowRight, UserPlus, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -15,7 +15,7 @@ const QUESTION_TIME_MS = 10000;
 const ANSWER_REVEAL_DELAY_MS = 3000; 
 
 export default function Multiplayer() {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth(); // Import loading state
     const navigate = useNavigate();
     const location = useLocation();
     
@@ -81,8 +81,11 @@ export default function Multiplayer() {
 
     // --- AUTH & INITIALIZATION LOGIC ---
     useEffect(() => {
+        // Wait for Auth to finish loading before making decisions
+        if (authLoading) return;
+
         if (user) {
-            // User is logged in, skip guest entry
+            // User is logged in, ready for menu
             if (view === 'loading' || view === 'guest_entry') setView('menu');
         } else {
             // Not logged in: Show guest entry unless already set up
@@ -92,23 +95,23 @@ export default function Multiplayer() {
                 setView('menu');
             }
         }
-    }, [user, isGuestSetup, view]);
+    }, [user, authLoading, isGuestSetup, view]);
 
-    // --- URL PARAM HANDLING (Direct Links) ---
+    // --- Handle URL Params (Join Link) ---
     useEffect(() => {
         const searchParams = new URLSearchParams(location.search);
         const codeParam = searchParams.get('code');
         
-        // 1. If code exists, save it to state immediately (so input is filled)
         if (codeParam && !roomCode) {
             setRoomCode(codeParam.toUpperCase());
         }
 
-        // 2. If we have a username (User or Guest) AND a code, auto-switch to JOIN screen
-        if (codeParam && currentUsername && (view === 'menu' || view === 'guest_entry')) {
+        // Only switch to JOIN view if we are fully authenticated (Guest or User)
+        // and currently in the menu (ready to act)
+        if (codeParam && currentUsername && view === 'menu') {
             setView('join');
-            // We do NOT clear the URL yet, to let the user see the code is applied
-            // Optionally, clear it after a delay or upon successful join
+            // Do not clear history yet, let the user confirm joining
+            toast.success('Room code found! Click Enter to join.', { icon: '🔗' });
         }
     }, [location, view, currentUsername, roomCode]);
 
@@ -140,10 +143,10 @@ export default function Multiplayer() {
     useEffect(() => {
         if (view === 'loading' && isRoomActionPending) {
             roomActionTimeoutRef.current = setTimeout(() => {
-                toast.error("Room action timed out. Please retry.", { duration: 5000 });
+                toast.error("Request timed out.", { duration: 4000 });
                 setIsRoomActionPending(false);
                 setView('menu');
-            }, 15000); 
+            }, 10000); 
         } else {
             if (roomActionTimeoutRef.current) clearTimeout(roomActionTimeoutRef.current);
         }
@@ -177,24 +180,8 @@ export default function Multiplayer() {
         let countdownInterval;
         if (socket.connected) setIsConnected(true);
 
-        const onConnect = () => {
-            setIsConnected(true);
-            const { view, roomCode, user, isGuestSetup, guestName } = stateRef.current;
-            const activeUser = user?.username || (isGuestSetup ? guestName : null);
-
-            // Re-join if we were in the middle of loading
-            if (view === 'loading' && roomCode && activeUser) {
-                 socket.emit('joinRoom', { roomCode, username: activeUser });
-            }
-        };
-
-        const onDisconnect = () => {
-            setIsConnected(false);
-            const { lobbyData } = stateRef.current;
-            if (lobbyData) {
-                toast.error("Disconnected from lobby. Reconnecting...", { duration: 3000 });
-            }
-        };
+        const onConnect = () => setIsConnected(true);
+        const onDisconnect = () => setIsConnected(false);
         
         socket.on('connect', onConnect);
         socket.on('disconnect', onDisconnect);
@@ -205,7 +192,7 @@ export default function Multiplayer() {
             const quiz = availableQuizzes.find(q => String(q.id) === String(data.quizId));
             const quizTitle = quiz ? quiz.title : 'Unknown Quiz';
             
-            // Clear URL param on successful join
+            // If we successfully joined, clear the URL code to prevent loop
             window.history.replaceState({}, '', '/multiplayer');
 
             setLobbyData({
@@ -224,7 +211,7 @@ export default function Multiplayer() {
         const handlePlayerAnswered = (data) => {
             const { currentQIndex } = stateRef.current;
             if (data.qIndex === currentQIndex) {
-                 toast(`${data.username} submitted an answer!`);
+                 toast(`${data.username} submitted an answer!`, { icon: '⚡' });
             }
         };
 
@@ -281,18 +268,21 @@ export default function Multiplayer() {
             setPlayerRanking(data.finalRanking);
             setLobbyData(prev => ({ ...prev, players: data.finalRanking }));
             setView('results');
-            toast.success("Game Over! Check the rankings.", { duration: 5000 });
+            toast.success("Game Over!", { duration: 5000 });
         };
         
         const handleRoomError = (message) => {
             setIsRoomActionPending(false); 
             toast.error(message, { duration: 3000 });
-            setView('menu'); 
-            setLobbyData(null);
+            
+            // If we are stuck in loading, go back to menu
+            if (stateRef.current.view === 'loading') {
+                setView('menu');
+            }
         };
 
         socket.on('lobbyUpdate', handleLobbyUpdate); 
-        socket.on('playerJoined', (data) => toast(`${data.username} joined the lobby!`)); 
+        socket.on('playerJoined', (data) => toast.success(`${data.username} joined!`)); 
         socket.on('playerAnswered', handlePlayerAnswered); 
         socket.on('startCountdown', handleStartCountdown); 
         socket.on('showAnswer', handleShowAnswer); 
@@ -320,9 +310,8 @@ export default function Multiplayer() {
     
     const handleCancel = () => {
         setIsRoomActionPending(false);
-        setRoomCode('');
-        // If we were in JOIN mode, go back to MENU. 
-        // Note: We stay logged in (or guest mode)
+        setRoomCode(''); 
+        // Reset everything to menu state
         setView('menu');
         toast.dismiss();
     };
@@ -331,8 +320,7 @@ export default function Multiplayer() {
         e.preventDefault();
         if (!guestName.trim()) return toast.error("Please enter a name.");
         setIsGuestSetup(true);
-        // After setting name, view effect will switch to 'menu'
-        // Then URL param effect will see name + code and switch to 'join' automatically
+        setView('menu');
     };
 
     const handleCreateRoom = (e) => {
@@ -373,15 +361,16 @@ export default function Multiplayer() {
         toast.success("Answer sent!", { duration: 1000 });
     };
     
+    // FIX: Cleaner Leave Logic
     const leaveRoom = () => {
         if (lobbyData) {
+            // Use the new server event instead of disconnect
             socket.emit('leaveRoom', { roomCode: lobbyData.roomCode });
-            stateRef.current.lobbyData = null; 
-            socket.disconnect(); 
-            socket.connect(); 
         }
         setLobbyData(null);
+        setRoomCode(''); // Clear code so we don't rejoin immediately
         setView('menu');
+        setIsRoomActionPending(false);
     };
 
     const copyToClipboard = (text, field) => {
@@ -393,7 +382,6 @@ export default function Multiplayer() {
 
     // --- RENDERERS ---
 
-    // 1. GUEST ENTRY
     const renderGuestEntry = () => (
         <div className="flex flex-col items-center justify-center space-y-8 animate-fade-in text-center">
             <div className="mb-4">
@@ -432,7 +420,6 @@ export default function Multiplayer() {
         </div>
     );
 
-    // 2. MAIN MENU
     const renderMenu = () => (
         <div className="space-y-8 animate-fade-in">
             <div className="flex justify-between items-center pb-6 border-b border-gray-800">
@@ -478,7 +465,6 @@ export default function Multiplayer() {
         </div>
     );
 
-    // 3. JOIN ROOM
     const renderJoinRoom = () => (
         <form onSubmit={handleJoinRoom} className="space-y-8 animate-fade-in text-center max-w-sm mx-auto">
             <div className="mb-8">
@@ -505,6 +491,7 @@ export default function Multiplayer() {
                 <Button type="submit" variant="primary" className="w-full h-14 text-lg font-bold bg-neon-green hover:bg-green-500 text-black shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all hover:scale-[1.02]" disabled={isRoomActionPending || roomCode.length !== 4}>
                     Enter Room <ArrowRight className="ml-2" />
                 </Button>
+                {/* Fixed Cancel Button */}
                 <Button type="button" onClick={handleCancel} variant="ghost" className="w-full text-gray-500 hover:text-white" disabled={false}>
                     <ArrowLeft size={16} className="mr-2" /> Cancel
                 </Button>
@@ -512,7 +499,6 @@ export default function Multiplayer() {
         </form>
     );
 
-    // 4. CREATE ROOM
     const renderCreateRoom = () => (
         <form onSubmit={handleCreateRoom} className="space-y-6 animate-fade-in">
             <h2 className="text-3xl font-black text-neon-blue mb-6">Setup Game</h2>
@@ -541,7 +527,6 @@ export default function Multiplayer() {
         </form>
     );
 
-    // 5. LOBBY
     const renderLobby = () => {
         if (!lobbyData) return renderMenu();
         const players = lobbyData.players || [];
@@ -620,7 +605,6 @@ export default function Multiplayer() {
         );
     };
 
-    // 6. COUNTDOWN (Same as before)
     const renderCountdown = () => {
         if (!lobbyData) return renderMenu();
         let colorClass = "text-white";
@@ -646,7 +630,6 @@ export default function Multiplayer() {
         );
     };
 
-    // 7. GAME (Same as before)
     const renderGame = () => {
         if (!gameQuestions || !lobbyData) return renderMenu();
         const q = gameQuestions[currentQIndex];
@@ -706,7 +689,6 @@ export default function Multiplayer() {
         );
     };
 
-    // 8. RESULTS (Same as before)
     const renderResults = () => {
         if (!playerRanking || !lobbyData) return renderMenu();
         return (
@@ -735,7 +717,6 @@ export default function Multiplayer() {
         );
     };
     
-    // 9. LOADING (Same as before)
     const renderLoading = () => (
         <div className="text-center text-neon-blue flex flex-col items-center justify-center space-y-4 h-64">
             <Loader size={48} className="animate-spin" /> 
@@ -745,6 +726,8 @@ export default function Multiplayer() {
     );
 
     const renderContent = () => {
+        if (authLoading) return renderLoading(); // Wait for Auth
+
         switch (view) {
             case 'guest_entry': return renderGuestEntry();
             case 'create': return renderCreateRoom();
