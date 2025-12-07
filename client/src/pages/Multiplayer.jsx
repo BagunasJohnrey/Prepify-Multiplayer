@@ -6,7 +6,7 @@ import Input from '../components/ui/Input';
 import toast from 'react-hot-toast';
 import socket from '../utils/socket'; 
 import api from '../utils/api'; 
-import Confetti from 'react-confetti'; // <--- IMPORT CONFETTI
+import Confetti from 'react-confetti'; 
 
 const COUNTDOWN_SECONDS = 5; 
 const QUESTION_TIME_MS = 10000; 
@@ -36,7 +36,7 @@ export default function Multiplayer() {
     const [playerAnswerLocal, setPlayerAnswerLocal] = useState(null); 
     
     // UI State
-    const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight }); // <--- CONFETTI SIZE
+    const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
     const [availableQuizzes, setAvailableQuizzes] = useState([]);
     const [quizzesLoading, setQuizzesLoading] = useState(true);
@@ -470,30 +470,43 @@ export default function Multiplayer() {
         );
     };
 
+    // --- REDESIGNED COUNTDOWN START ---
     const renderCountdown = () => {
         if (!lobbyData) return renderMenu();
 
+        // Determine color based on time left
+        let colorClass = "text-white";
+        if (countdown === 3) colorClass = "text-red-500";
+        if (countdown === 2) colorClass = "text-orange-500";
+        if (countdown === 1) colorClass = "text-yellow-400";
+        if (countdown <= 0) colorClass = "text-neon-green";
+
         return (
-            <div className="text-center py-6 animate-fade-in">
-                <h2 className="text-4xl md:text-5xl font-black text-white mb-12">
-                    Game Starting...
-                </h2>
+            <div className="flex flex-col items-center justify-center min-h-[50vh] animate-fade-in py-10">
+                <h3 className="text-gray-500 font-bold uppercase tracking-[0.5em] mb-12 animate-pulse">
+                    Get Ready
+                </h3>
                 
-                <div className="relative inline-block mb-12">
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-neon-green/20 rounded-full blur-2xl animate-pulse"></div>
-                    <span className="relative z-10 text-9xl font-mono font-black text-neon-green drop-shadow-[0_0_10px_rgba(57,255,20,0.5)]">
+                <div className="relative flex items-center justify-center">
+                    {/* Glowing Background Ring */}
+                    <div className={`absolute w-64 h-64 rounded-full blur-3xl opacity-20 transition-colors duration-300 ${colorClass.replace('text-', 'bg-')}`}></div>
+                    
+                    {/* The Number */}
+                    <span className={`text-[12rem] font-mono font-black leading-none transition-all duration-300 transform scale-100 ${colorClass} drop-shadow-2xl`}>
                         {countdown > 0 ? countdown : 'GO!'}
                     </span>
-                    <Clock size={40} className="absolute -top-6 -right-8 text-gray-500/50 rotate-12" />
                 </div>
 
-                <div className="space-y-2">
-                    <h3 className="text-2xl text-neon-blue font-bold px-4">{lobbyData.quizTitle}</h3>
-                    <p className="text-gray-500 text-sm font-bold uppercase tracking-[0.2em]">Get Ready to Answer</p>
+                <div className="mt-16 text-center space-y-3">
+                    <span className="text-neon-blue text-sm font-bold uppercase tracking-wider bg-neon-blue/10 px-3 py-1 rounded-full">Next Up</span>
+                    <h2 className="text-2xl md:text-3xl font-black text-white max-w-lg leading-tight">
+                        {lobbyData.quizTitle}
+                    </h2>
                 </div>
             </div>
         );
     };
+    // --- REDESIGNED COUNTDOWN END ---
 
     const renderGame = () => {
         if (!gameQuestions || !lobbyData) return renderMenu();
@@ -508,11 +521,9 @@ export default function Multiplayer() {
                         Q<span className="text-white font-bold">{currentQIndex + 1}</span>/{gameQuestions.length}
                     </h3>
                     <div className="flex items-center gap-4 text-white">
-                        {/* --- CLOCK ALIGNMENT FIX START --- */}
                         <span className={`font-bold flex items-center gap-1.5 leading-none ${timeLeft <= 3 ? 'text-red-500 animate-pulse' : 'text-neon-blue'}`}>
-                            <Clock size={18} className="mb-[1px]" /> {timeLeft > 0 ? timeLeft : 0}s
+                            <Clock size={18} className="mb-px" /> {timeLeft > 0 ? timeLeft : 0}s
                         </span>
-                        {/* --- CLOCK ALIGNMENT FIX END --- */}
                         
                         <span className="text-neon-green font-bold flex items-center gap-1">
                             <Zap size={18} /> {player.score}
@@ -579,15 +590,18 @@ export default function Multiplayer() {
         if (!playerRanking || !lobbyData) return renderMenu();
         return (
             <div className="space-y-6 text-center relative">
-                 {/* --- CONFETTI ADDED START --- */}
-                 <Confetti 
-                    width={windowSize.width} 
-                    height={windowSize.height} 
-                    recycle={false} 
-                    numberOfPieces={500} 
-                    gravity={0.15}
-                 />
-                 {/* --- CONFETTI ADDED END --- */}
+                 {/* --- FIXED CONFETTI DESIGN START --- */}
+                 {/* Placed inside a fixed container to ensure full screen coverage regardless of scroll/position */}
+                 <div className="fixed inset-0 z-50 pointer-events-none">
+                     <Confetti 
+                        width={windowSize.width} 
+                        height={windowSize.height} 
+                        recycle={false} 
+                        numberOfPieces={800} 
+                        gravity={0.2}
+                     />
+                 </div>
+                 {/* --- FIXED CONFETTI DESIGN END --- */}
 
                 <Trophy size={60} className="text-neon-yellow mx-auto" />
                 <h2 className="text-4xl font-black text-white">Final Ranking</h2>
