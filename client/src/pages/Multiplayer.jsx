@@ -19,7 +19,7 @@ export default function Multiplayer() {
     const [lobbyData, setLobbyData] = useState(null); 
     const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
     const [isConnected, setIsConnected] = useState(false); 
-    const [isRoomActionPending, setIsRoomActionPending] = useState(false); // NEW STATE: Watchdog
+    const [isRoomActionPending, setIsRoomActionPending] = useState(false); 
     
     // Game State
     const [gameQuestions, setGameQuestions] = useState(null);
@@ -33,7 +33,7 @@ export default function Multiplayer() {
     const [timeLeft, setTimeLeft] = useState(QUESTION_TIME_MS / 1000);
     const qDeadlineRef = useRef(0); 
     const qTimerIntervalRef = useRef(null); 
-    const roomActionTimeoutRef = useRef(null); // NEW REF: Watchdog Timer
+    const roomActionTimeoutRef = useRef(null); 
     const [playerAnswerLocal, setPlayerAnswerLocal] = useState(null); 
     
     const [availableQuizzes, setAvailableQuizzes] = useState([]);
@@ -59,17 +59,16 @@ export default function Multiplayer() {
         fetchQuizzes();
     }, []);
 
-    // NEW: Watchdog Timer to prevent freezing if server response is lost
+    // Watchdog Timer to prevent freezing if server response is lost
     useEffect(() => {
         if (view === 'loading' && isRoomActionPending) {
-            // Set a 15-second timeout to accommodate slow server response (e.g., cold start)
+            // Set a 15-second timeout 
             roomActionTimeoutRef.current = setTimeout(() => {
-                toast.error("Room action timed out. Please retry or check server logs.", { duration: 5000 });
+                toast.error("Room action timed out. Please retry.", { duration: 5000 });
                 setView('menu');
                 setIsRoomActionPending(false);
             }, 15000); 
         } else {
-            // If the view changes or pending state is cleared, clear any running timer
             if (roomActionTimeoutRef.current) {
                 clearTimeout(roomActionTimeoutRef.current);
             }
@@ -135,7 +134,8 @@ export default function Multiplayer() {
         };
 
         const handleLobbyUpdate = (data) => {
-            setIsRoomActionPending(false); // CRITICAL: Clear pending state on successful response
+            // CRITICAL: Clear pending state on successful response
+            setIsRoomActionPending(false); 
             
             const quizTitle = getQuizTitle(data.quizId);
             
@@ -221,7 +221,8 @@ export default function Multiplayer() {
         };
         
         const handleRoomError = (message) => {
-            setIsRoomActionPending(false); // CRITICAL: Clear pending state on error response
+            // CRITICAL: Clear pending state on error response
+            setIsRoomActionPending(false); 
             toast.error(message, { duration: 3000 });
             setView('menu'); 
             setLobbyData(null);
@@ -256,7 +257,8 @@ export default function Multiplayer() {
     // --- Actions (Emitting to Server) ---
     const handleCreateRoom = (e) => {
         e.preventDefault();
-        if (!isConnected) return toast.error("Connection not ready. Try again in a moment.");
+        // Use isRoomActionPending to prevent double submission
+        if (!isConnected || isRoomActionPending) return toast.error("Connection or previous action pending.");
         if (quizzesLoading || availableQuizzes.length === 0) {
             toast.error("Please wait for quizzes to load or generate one.", { duration: 3000 });
             return;
@@ -273,7 +275,7 @@ export default function Multiplayer() {
 
     const handleJoinRoom = (e) => {
         e.preventDefault();
-        if (!isConnected) return toast.error("Connection not ready. Try again in a moment.");
+        if (!isConnected || isRoomActionPending) return toast.error("Connection or previous action pending.");
 
         const code = roomCode.toUpperCase();
         if (!user || code.length !== 4) {
@@ -330,10 +332,10 @@ export default function Multiplayer() {
             <h2 className="text-3xl font-black text-white mb-6">Multiplayer Arena</h2>
             <p className="text-gray-400 mb-8">Compete against your friends in real-time quiz battles. Speed equals score!</p>
 
-            <Button onClick={() => setView('create')} variant="primary" className="w-full justify-center h-16 text-lg" disabled={quizzesLoading || availableQuizzes.length === 0 || !isConnected}>
+            <Button onClick={() => setView('create')} variant="primary" className="w-full justify-center h-16 text-lg" disabled={isRoomActionPending || quizzesLoading || availableQuizzes.length === 0 || !isConnected}>
                 <PlusCircle /> Create New Room
             </Button>
-            <Button onClick={() => setView('join')} variant="outline" className="w-full justify-center h-16 text-lg" disabled={!isConnected}>
+            <Button onClick={() => setView('join')} variant="outline" className="w-full justify-center h-16 text-lg" disabled={isRoomActionPending || !isConnected}>
                 <LogIn /> Join Room
             </Button>
             
@@ -380,10 +382,10 @@ export default function Multiplayer() {
                 </>
             )}
 
-            <Button type="submit" variant="success" className="w-full justify-center" disabled={quizzesLoading || availableQuizzes.length === 0}>
+            <Button type="submit" variant="success" className="w-full justify-center" disabled={isRoomActionPending || quizzesLoading || availableQuizzes.length === 0}>
                 Create & Start Lobby
             </Button>
-            <Button type="button" onClick={() => setView('menu')} variant="outline" className="w-full justify-center">
+            <Button type="button" onClick={() => setView('menu')} variant="outline" className="w-full justify-center" disabled={isRoomActionPending}>
                 Back to Menu
             </Button>
         </form>
@@ -404,10 +406,10 @@ export default function Multiplayer() {
                 className="text-center text-xl font-mono uppercase"
             />
 
-            <Button type="submit" variant="primary" className="w-full justify-center">
+            <Button type="submit" variant="primary" className="w-full justify-center" disabled={isRoomActionPending}>
                 Join Game
             </Button>
-            <Button type="button" onClick={() => setView('menu')} variant="outline" className="w-full justify-center">
+            <Button type="button" onClick={() => setView('menu')} variant="outline" className="w-full justify-center" disabled={isRoomActionPending}>
                 Back to Menu
             </Button>
         </form>
@@ -602,8 +604,8 @@ export default function Multiplayer() {
     const renderLoading = () => (
         <div className="text-center text-neon-blue flex flex-col items-center justify-center space-y-4 h-64">
             <Loader size={48} className="animate-spin" /> 
-            <p className="text-xl font-bold">Connecting to server...</p>
-            <p className="text-sm text-gray-500">Waiting for room details.</p>
+            <p className="text-xl font-bold">{isRoomActionPending ? "Awaiting server response..." : "Connecting to server..."}</p>
+            <p className="text-sm text-gray-500">Waiting for room details. (Will time out in 15s if no response)</p>
         </div>
     );
 
