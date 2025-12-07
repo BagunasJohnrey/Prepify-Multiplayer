@@ -7,20 +7,26 @@ import rateLimit from "express-rate-limit";
 import authRoutes from "./routes/authRoutes.js";
 import quizRoutes from "./routes/quizRoutes.js";
 import Quiz from "./models/Quiz.js"; 
+import path from "path"; //
+import { fileURLToPath } from "url"; //
 
 dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
 
+// Helper to define __dirname in ES Modules
+const __filename = fileURLToPath(import.meta.url); //
+const __dirname = path.dirname(__filename); //
+
 // CRITICAL FIX: Instruct Express to trust the proxy headers from Render/load balancer.
 // This resolves the ERR_ERL_UNEXPECTED_X_FORWARDED_FOR ValidationError.
-app.set('trust proxy', 1);
+app.set('trust proxy', 1); //
 
 const PORT = process.env.PORT || 3000;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173'; 
 // Define allowed origins for CORS (Render uses a single origin for a single deployment)
-const allowedOrigins = [CLIENT_URL, 'http://localhost:5173'];
+const allowedOrigins = [CLIENT_URL, 'http://localhost:5173']; //
 
 const QUESTION_TIME_MS = 10000; 
 const ANSWER_REVEAL_DELAY_MS = 3000; 
@@ -41,7 +47,7 @@ const io = new SocketIOServer(httpServer, {
 // This ensures Express doesn't 404 the initial polling request
 // during the handshake on Vercel/Render.
 app.get('/socket.io/', (req, res) => {
-    res.status(200).send('Socket.IO health check successful.');
+    res.status(200).send('Socket.IO health check successful.'); //
 });
 // ----------------------------------------------------
 
@@ -67,6 +73,13 @@ const generateLimiter = rateLimit({
 app.use("/api/generate", generateLimiter);
 
 app.use(express.json());
+
+// ----------------------------------------------------
+// FIX 2: Serve Static Files
+// This tells Express to serve the built React files (CSS, JS, Images)
+// from the client/dist directory.
+app.use(express.static(path.join(__dirname, "../client/dist")));
+// ----------------------------------------------------
 
 app.use("/api/auth", authRoutes); 
 app.use("/api", quizRoutes);      
@@ -338,6 +351,20 @@ io.on('connection', (socket) => {
         }
     });
 });
+
+// ----------------------------------------------------
+// FIX 3: SPA Fallback Route
+// This wildcard route must be placed AFTER all other API/Socket routes.
+// It serves index.html for any request that doesn't match an API endpoint,
+// effectively fixing the "404 Not Found" on page refresh.
+app.get('*', (req, res) => {
+    // Safety check: ensure we don't accidentally intercept API calls if they fall through
+    if (req.originalUrl.startsWith('/api')) {
+        return res.status(404).json({ error: "API endpoint not found" });
+    }
+    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+});
+// ----------------------------------------------------
 
 // Self-ping function to keep Render instance awake
 const RENDER_HOSTNAME = process.env.RENDER_EXTERNAL_HOSTNAME || 'localhost';
