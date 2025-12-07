@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'; 
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Users, PlusCircle, LogIn, QrCode, Loader, Clock, Trophy, Zap, AlertCircle, CheckCircle, XCircle, Copy, Link as LinkIcon, Share2, User } from 'lucide-react';
+import { Users, PlusCircle, LogIn, QrCode, Loader, Clock, Trophy, Zap, AlertCircle, CheckCircle, XCircle, Copy, Link as LinkIcon, Share2, User, KeyRound, ArrowRight, UserPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -21,13 +21,13 @@ export default function Multiplayer() {
     
     // --- GUEST STATE ---
     const [guestName, setGuestName] = useState('');
-    const [isGuestSetup, setIsGuestSetup] = useState(false); // True if guest name is set
+    const [isGuestSetup, setIsGuestSetup] = useState(false); 
 
     // Determine the active username
     const currentUsername = user?.username || (isGuestSetup ? guestName : null);
 
     // View State
-    const [view, setView] = useState('loading'); // Start in loading to determine auth state
+    const [view, setView] = useState('loading'); 
     const [roomCode, setRoomCode] = useState('');
     const [lobbyData, setLobbyData] = useState(null); 
     const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
@@ -81,11 +81,11 @@ export default function Multiplayer() {
 
     // --- AUTH & INITIALIZATION LOGIC ---
     useEffect(() => {
-        // If user is logged in, they are ready
         if (user) {
+            // User is logged in, skip guest entry
             if (view === 'loading' || view === 'guest_entry') setView('menu');
         } else {
-            // If not logged in and guest name not set, show guest entry
+            // Not logged in: Show guest entry unless already set up
             if (!isGuestSetup && view !== 'guest_entry') {
                 setView('guest_entry');
             } else if (isGuestSetup && view === 'loading') {
@@ -94,13 +94,12 @@ export default function Multiplayer() {
         }
     }, [user, isGuestSetup, view]);
 
-    // --- NEW: Handle URL Params for Direct Join Links ---
+    // --- Handle URL Params for Direct Join ---
     useEffect(() => {
         const searchParams = new URLSearchParams(location.search);
         const codeParam = searchParams.get('code');
         
-        // If we have a code, but no user/guest name yet, we wait in 'guest_entry'
-        // If we have a code AND a username, we auto-switch to join
+        // Auto-join if code exists and we have a username (user or guest)
         if (codeParam && currentUsername && (view === 'menu' || view === 'guest_entry')) {
             setRoomCode(codeParam.toUpperCase());
             setView('join');
@@ -119,7 +118,6 @@ export default function Multiplayer() {
     useEffect(() => {
         const fetchQuizzes = async () => {
             try {
-                // Quizzes are public, so guests can fetch them too
                 const { data } = await api.get('/quizzes');
                 setAvailableQuizzes(data);
                 if (data.length > 0) {
@@ -181,7 +179,6 @@ export default function Multiplayer() {
             const { view, roomCode, user, isGuestSetup, guestName } = stateRef.current;
             const activeUser = user?.username || (isGuestSetup ? guestName : null);
 
-            // Re-join logic if needed
             if (view === 'loading' && roomCode && activeUser) {
                  socket.emit('joinRoom', { roomCode, username: activeUser });
             }
@@ -378,95 +375,132 @@ export default function Multiplayer() {
 
     // --- RENDERERS ---
 
-    // 1. Guest Entry Screen
+    // 1. GUEST / LOGIN GATE
     const renderGuestEntry = () => (
-        <div className="flex flex-col items-center justify-center space-y-8 animate-fade-in">
-            <div className="text-center">
-                <h2 className="text-3xl font-black text-white mb-2">Welcome Player</h2>
-                <p className="text-gray-400">Join the arena to compete with friends.</p>
+        <div className="flex flex-col items-center justify-center space-y-8 animate-fade-in text-center">
+            <div className="mb-4">
+                <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-neon-blue shadow-[0_0_20px_rgba(37,99,235,0.3)]">
+                    <UserPlus size={40} className="text-neon-blue" />
+                </div>
+                <h2 className="text-4xl font-black text-white mb-3">Welcome to Arena</h2>
+                <p className="text-gray-400 text-lg">Choose how you want to play today.</p>
             </div>
 
-            <div className="bg-gray-800 p-8 rounded-3xl border border-gray-700 w-full max-w-sm shadow-2xl">
-                <form onSubmit={handleGuestEntry} className="space-y-6">
-                    <Input 
-                        label="Enter Guest Name" 
-                        placeholder="e.g. SpeedRacer" 
-                        value={guestName} 
-                        onChange={(e) => setGuestName(e.target.value)} 
-                        className="text-center"
-                    />
-                    <Button type="submit" variant="primary" className="w-full">
-                        Continue as Guest
-                    </Button>
-                </form>
-
-                <div className="relative my-8">
-                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-700"></div></div>
-                    <div className="relative flex justify-center text-sm"><span className="px-2 bg-gray-800 text-gray-500">OR</span></div>
+            <div className="w-full max-w-sm space-y-8">
+                {/* Guest Option */}
+                <div className="space-y-4">
+                    <form onSubmit={handleGuestEntry} className="space-y-3">
+                        <Input 
+                            label="Play as Guest"
+                            placeholder="Enter a nickname..." 
+                            value={guestName} 
+                            onChange={(e) => setGuestName(e.target.value)} 
+                            className="text-center h-12 text-lg bg-gray-900 border-gray-700 focus:border-neon-blue"
+                        />
+                        <Button type="submit" variant="primary" className="w-full h-12 text-lg font-bold shadow-lg shadow-blue-500/20">
+                            Continue as Guest <ArrowRight size={18} className="ml-2" />
+                        </Button>
+                    </form>
                 </div>
 
-                <Button onClick={() => navigate('/')} variant="outline" className="w-full">
-                    <LogIn size={18} className="mr-2" /> Login to Account
+                <div className="relative">
+                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-700"></div></div>
+                    <div className="relative flex justify-center text-sm"><span className="px-4 bg-dark-surface text-gray-500 font-bold tracking-wider">OR</span></div>
+                </div>
+
+                {/* Login Option */}
+                <Button onClick={() => navigate('/')} variant="outline" className="w-full h-12 border-gray-600 hover:bg-gray-800 text-gray-300">
+                    <LogIn size={18} className="mr-2" /> Login / Register
                 </Button>
             </div>
         </div>
     );
 
-    // 2. Main Menu
+    // 2. MAIN MENU
     const renderMenu = () => (
-        <div className="space-y-6 animate-fade-in">
-            <div className="flex justify-between items-center mb-6">
+        <div className="space-y-8 animate-fade-in">
+            <div className="flex justify-between items-center pb-6 border-b border-gray-800">
                 <h2 className="text-3xl font-black text-white">Multiplayer Arena</h2>
-                <div className="flex items-center gap-2 bg-gray-800 px-3 py-1.5 rounded-full border border-gray-700">
-                    <User size={16} className="text-neon-blue" />
-                    <span className="text-sm font-bold text-white">{currentUsername}</span>
+                <div className="flex items-center gap-2 bg-gray-800 px-4 py-2 rounded-full border border-gray-700 shadow-sm">
+                    <User size={18} className="text-neon-blue" />
+                    <span className="text-sm font-bold text-white tracking-wide">{currentUsername}</span>
                 </div>
             </div>
             
-            <p className="text-gray-400 mb-8">Compete against your friends in real-time quiz battles. Speed equals score!</p>
-
-            <Button onClick={() => setView('create')} variant="primary" className="w-full justify-center h-16 text-lg" disabled={isRoomActionPending || quizzesLoading || availableQuizzes.length === 0 || !isConnected}>
-                <PlusCircle /> Create New Room
-            </Button>
-            <Button onClick={() => setView('join')} variant="outline" className="w-full justify-center h-16 text-lg" disabled={isRoomActionPending || !isConnected}>
-                <LogIn /> Join Room
-            </Button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Button onClick={() => setView('create')} variant="primary" className="flex flex-col items-center justify-center h-40 space-y-3 bg-linear-to-br from-blue-600 to-blue-800 hover:from-blue-500 hover:to-blue-700 border-none shadow-xl transform transition hover:-translate-y-1" disabled={isRoomActionPending || quizzesLoading || availableQuizzes.length === 0 || !isConnected}>
+                    <PlusCircle size={40} className="mb-2" />
+                    <span className="text-xl font-black">Create Room</span>
+                    <span className="text-sm text-blue-200 font-normal">Host a game for friends</span>
+                </Button>
+                
+                <Button onClick={() => setView('join')} variant="outline" className="flex flex-col items-center justify-center h-40 space-y-3 border-2 border-gray-700 hover:border-neon-green hover:bg-gray-800/50 shadow-xl transform transition hover:-translate-y-1" disabled={isRoomActionPending || !isConnected}>
+                    <LogIn size={40} className="mb-2 text-neon-green" />
+                    <span className="text-xl font-black text-white">Join Room</span>
+                    <span className="text-sm text-gray-400 font-normal">Enter a code to play</span>
+                </Button>
+            </div>
             
-            {!isConnected && <div className="text-center text-red-500 animate-pulse">Connecting to server...</div>}
+            {!isConnected && <div className="text-center text-red-500 animate-pulse font-mono text-sm mt-4">● Connecting to server...</div>}
         </div>
     );
 
-    // 3. Create Room
+    // 3. JOIN ROOM UI (IMPROVED)
+    const renderJoinRoom = () => (
+        <form onSubmit={handleJoinRoom} className="space-y-8 animate-fade-in text-center max-w-sm mx-auto">
+            <div className="mb-8">
+                <div className="w-16 h-16 bg-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-700">
+                    <KeyRound size={32} className="text-neon-green" />
+                </div>
+                <h2 className="text-3xl font-black text-white">Join Game</h2>
+                <p className="text-gray-400">Enter the 4-character code below.</p>
+            </div>
+
+            <div className="relative">
+                <Input 
+                    type="text" 
+                    placeholder="CODE" 
+                    value={roomCode} 
+                    onChange={e => setRoomCode(e.target.value.toUpperCase())} 
+                    maxLength={4} 
+                    className="text-center text-5xl font-mono font-black uppercase tracking-[0.5em] h-24 bg-gray-900 border-2 border-gray-700 focus:border-neon-green rounded-2xl placeholder-gray-800"
+                />
+            </div>
+
+            <div className="space-y-3 pt-4">
+                <Button type="submit" variant="primary" className="w-full h-14 text-lg font-bold bg-neon-green hover:bg-green-500 text-black shadow-[0_0_20px_rgba(34,197,94,0.3)]" disabled={isRoomActionPending || roomCode.length !== 4}>
+                    Enter Room
+                </Button>
+                <Button type="button" onClick={() => setView('menu')} variant="ghost" className="w-full text-gray-500 hover:text-white" disabled={isRoomActionPending}>
+                    Cancel
+                </Button>
+            </div>
+        </form>
+    );
+
+    // 4. CREATE ROOM
     const renderCreateRoom = () => (
         <form onSubmit={handleCreateRoom} className="space-y-6 animate-fade-in">
-            <h2 className="text-3xl font-black text-neon-blue mb-6">Create Room</h2>
+            <h2 className="text-3xl font-black text-neon-blue mb-6">Setup Game</h2>
             <p className="text-gray-400">Select the quiz material for your battle.</p>
             {quizzesLoading ? <div className="text-center text-neon-blue">Loading Quizzes...</div> : (
                 <>
                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Quiz Material</label>
-                    <select value={selectedQuizId || ''} onChange={(e) => setSelectedQuizId(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-xl p-3 text-sm text-white focus:border-neon-purple outline-none cursor-pointer">
+                    <select value={selectedQuizId || ''} onChange={(e) => setSelectedQuizId(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-xl p-4 text-white focus:border-neon-purple outline-none cursor-pointer text-lg">
                         {availableQuizzes.map(quiz => (
                             <option key={quiz.id} value={String(quiz.id)}>{quiz.title} ({quiz.difficulty})</option>
                         ))}
                     </select>
                 </>
             )}
-            <Button type="submit" variant="success" className="w-full justify-center" disabled={isRoomActionPending}>Create & Start Lobby</Button>
-            <Button type="button" onClick={() => setView('menu')} variant="outline" className="w-full justify-center" disabled={isRoomActionPending}>Back</Button>
+            <div className="pt-6 space-y-3">
+                <Button type="submit" variant="success" className="w-full h-14 text-lg font-bold" disabled={isRoomActionPending}>Create Lobby</Button>
+                <Button type="button" onClick={() => setView('menu')} variant="outline" className="w-full" disabled={isRoomActionPending}>Back</Button>
+            </div>
         </form>
     );
 
-    // 4. Join Room
-    const renderJoinRoom = () => (
-        <form onSubmit={handleJoinRoom} className="space-y-6 animate-fade-in">
-            <h2 className="text-3xl font-black text-neon-blue mb-6">Join Room</h2>
-            <Input label="Room Code" type="text" placeholder="A3B4" value={roomCode} onChange={e => setRoomCode(e.target.value.toUpperCase())} maxLength={4} className="text-center text-xl font-mono uppercase" />
-            <Button type="submit" variant="primary" className="w-full justify-center" disabled={isRoomActionPending}>Join Game</Button>
-            <Button type="button" onClick={() => setView('menu')} variant="outline" className="w-full justify-center" disabled={isRoomActionPending}>Back</Button>
-        </form>
-    );
-
-    // 5. Lobby
+    // 5. LOBBY
     const renderLobby = () => {
         if (!lobbyData) return renderMenu();
         const players = lobbyData.players || [];
@@ -547,7 +581,7 @@ export default function Multiplayer() {
         );
     };
 
-    // 6. Countdown
+    // 6. COUNTDOWN
     const renderCountdown = () => {
         if (!lobbyData) return renderMenu();
         let colorClass = "text-white";
@@ -573,7 +607,7 @@ export default function Multiplayer() {
         );
     };
 
-    // 7. Game Board
+    // 7. GAME
     const renderGame = () => {
         if (!gameQuestions || !lobbyData) return renderMenu();
         const q = gameQuestions[currentQIndex];
@@ -633,7 +667,7 @@ export default function Multiplayer() {
         );
     };
 
-    // 8. Results
+    // 8. RESULTS
     const renderResults = () => {
         if (!playerRanking || !lobbyData) return renderMenu();
         return (
@@ -662,7 +696,7 @@ export default function Multiplayer() {
         );
     };
     
-    // 9. Loading
+    // 9. LOADING
     const renderLoading = () => (
         <div className="text-center text-neon-blue flex flex-col items-center justify-center space-y-4 h-64">
             <Loader size={48} className="animate-spin" /> 
