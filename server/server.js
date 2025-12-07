@@ -73,6 +73,12 @@ app.use("/api", quizRoutes);
 // === SERVER-SIDE ROOM STATE MANAGEMENT & GAME LOGIC ===
 const rooms = new Map();
 
+// HELPER: Sanitize room state to avoid circular reference errors (remove qTimeout)
+const getSafeRoomState = (roomState) => {
+    const { qTimeout, ...safeState } = roomState;
+    return safeState;
+};
+
 const checkAllAnswered = (roomState) => {
     const totalPlayers = roomState.players.length;
     const answersReceived = roomState.players.filter(p => p.answers[roomState.currentQ]).length;
@@ -155,6 +161,7 @@ const advanceGame = (roomCode, roomState) => {
             const qStartTime = Date.now();
             const qDeadline = qStartTime + QUESTION_TIME_MS;
 
+            // This sets a Timeout object which causes the crash if emitted directly
             currentRoomState.qTimeout = setTimeout(() => {
                 advanceGame(roomCode, currentRoomState);
             }, QUESTION_TIME_MS);
@@ -165,7 +172,7 @@ const advanceGame = (roomCode, roomState) => {
                 players: currentRoomState.players,
                 qStartTime: qStartTime,
                 qDeadline: qDeadline,
-                duration: QUESTION_TIME_MS // <--- CHANGED: Send duration for sync
+                duration: QUESTION_TIME_MS 
             });
         }, ANSWER_REVEAL_DELAY_MS);
     }
@@ -191,7 +198,8 @@ io.on('connection', (socket) => {
         };
         rooms.set(roomCode, roomState);
 
-        socket.emit('lobbyUpdate', roomState); 
+        // SAFE EMIT
+        socket.emit('lobbyUpdate', getSafeRoomState(roomState)); 
     });
 
     socket.on('joinRoom', (data) => {
@@ -211,8 +219,9 @@ io.on('connection', (socket) => {
         socket.join(roomCode);
         roomState.players.push({ username, id: socket.id, score: 0, answers: [], lastScore: 0, socketId: socket.id });
 
-        socket.emit('lobbyUpdate', roomState);
-        socket.to(roomCode).emit('lobbyUpdate', roomState); 
+        // SAFE EMIT
+        socket.emit('lobbyUpdate', getSafeRoomState(roomState));
+        socket.to(roomCode).emit('lobbyUpdate', getSafeRoomState(roomState)); 
     });
 
     socket.on('startGame', async (data) => {
@@ -244,11 +253,9 @@ io.on('connection', (socket) => {
             
             roomState.currentQ = 0;
             
-            // --- CHANGED: Removed startTimestamp, added duration ---
-            
             io.to(roomCode).emit('startCountdown', { 
                 quizTitle: quiz.title,
-                duration: 5000, // <--- CHANGED: Send 5s duration
+                duration: 5000, 
                 quizData: roomState.quizData
             });
 
@@ -269,7 +276,7 @@ io.on('connection', (socket) => {
                     players: currentRoomState.players,
                     qStartTime: qStartTime,
                     qDeadline: qDeadline,
-                    duration: QUESTION_TIME_MS // <--- CHANGED: Send duration
+                    duration: QUESTION_TIME_MS 
                 });
             }, 5000); 
             
@@ -313,18 +320,21 @@ io.on('connection', (socket) => {
         if (roomInfo) {
             const { code: roomCode, room: roomState } = roomInfo;
             const index = roomState.players.findIndex(p => p.socketId === socket.id);
-            const disconnectedUsername = roomState.players[index].username;
-            roomState.players.splice(index, 1);
-            
-            if (roomState.players.length === 0) {
-                rooms.delete(roomCode);
-                if (roomState.qTimeout) clearTimeout(roomState.qTimeout);
-            } else {
-                if (disconnectedUsername === roomState.host) {
-                    roomState.host = roomState.players[0].username;
+            if (index !== -1) {
+                const disconnectedUsername = roomState.players[index].username;
+                roomState.players.splice(index, 1);
+                
+                if (roomState.players.length === 0) {
+                    rooms.delete(roomCode);
+                    if (roomState.qTimeout) clearTimeout(roomState.qTimeout);
+                } else {
+                    if (disconnectedUsername === roomState.host) {
+                        roomState.host = roomState.players[0].username;
+                    }
+                    // SAFE EMIT
+                    io.to(roomCode).emit('lobbyUpdate', getSafeRoomState(roomState)); 
+                    io.to(roomCode).emit('playerLeft', { username: disconnectedUsername });
                 }
-                io.to(roomCode).emit('lobbyUpdate', roomState); 
-                io.to(roomCode).emit('playerLeft', { username: disconnectedUsername });
             }
         }
     });
@@ -349,7 +359,8 @@ io.on('connection', (socket) => {
                     if (disconnectedUsername === roomState.host) {
                         roomState.host = roomState.players[0].username;
                     }
-                    io.to(roomCode).emit('lobbyUpdate', roomState); 
+                    // SAFE EMIT
+                    io.to(roomCode).emit('lobbyUpdate', getSafeRoomState(roomState)); 
                     io.to(roomCode).emit('playerLeft', { username: disconnectedUsername });
                 }
             }
