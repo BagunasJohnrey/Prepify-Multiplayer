@@ -328,6 +328,33 @@ io.on('connection', (socket) => {
             }
         }
     });
+
+    socket.on('leaveRoom', (data) => {
+        const { roomCode } = data;
+        const roomState = rooms.get(roomCode);
+        
+        if (roomState) {
+            const index = roomState.players.findIndex(p => p.socketId === socket.id);
+            if (index !== -1) {
+                const disconnectedUsername = roomState.players[index].username;
+                roomState.players.splice(index, 1);
+                
+                // Leave the socket room
+                socket.leave(roomCode);
+
+                if (roomState.players.length === 0) {
+                    rooms.delete(roomCode);
+                    if (roomState.qTimeout) clearTimeout(roomState.qTimeout);
+                } else {
+                    if (disconnectedUsername === roomState.host) {
+                        roomState.host = roomState.players[0].username;
+                    }
+                    io.to(roomCode).emit('lobbyUpdate', roomState); 
+                    io.to(roomCode).emit('playerLeft', { username: disconnectedUsername });
+                }
+            }
+        }
+    });
 });
 
 // ==========================================

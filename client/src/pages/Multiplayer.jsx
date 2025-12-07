@@ -717,7 +717,10 @@ export default function Multiplayer() {
         );
     };
     
+<<<<<<< HEAD
     // UPDATED: ADDED CANCEL BUTTON HERE
+=======
+>>>>>>> 809de6ebdaa5ac00250cc3b4de2e9cef1a6deaa8
     const renderLoading = () => (
         <div className="text-center text-neon-blue flex flex-col items-center justify-center space-y-4 h-64">
             <Loader size={48} className="animate-spin" /> 
