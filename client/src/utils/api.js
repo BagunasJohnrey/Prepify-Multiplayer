@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api', 
+  // Use the full URL set via Vercel env var
+  baseURL: import.meta.env.VITE_API_URL, 
 });
 
 api.interceptors.request.use((config) => {

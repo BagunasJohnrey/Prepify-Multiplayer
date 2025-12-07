@@ -1,15 +1,19 @@
 import { io } from 'socket.io-client';
 
-// Get the base URL (e.g., http://localhost:3000)
-// This is the correct base URL for the WebSocket connection
-const API_BASE_URL = import.meta.env.VITE_API_URL 
-    ? import.meta.env.VITE_API_URL.replace('/api', '') 
-    : 'http://localhost:3000'; 
+// Use the dedicated Socket URL set via Vercel env var
+const API_BASE_URL = import.meta.env.VITE_SOCKET_URL;
 
 const socket = io(API_BASE_URL, {
-    // Explicitly set the path to ensure the client connects correctly
-    // This often fixes 404 errors when Express routing interferes
     path: '/socket.io/', 
+    
+    // Prioritize native WebSockets on Render, fallback to polling
+    transports: ['websocket', 'polling'], 
+    
+    forceNew: true,
+    withCredentials: false,
+    
+    timeout: 10000, 
+    reconnectionAttempts: 5 
 });
 
 socket.on('connect', () => {

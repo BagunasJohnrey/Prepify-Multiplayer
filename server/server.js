@@ -14,27 +14,26 @@ const app = express();
 const httpServer = createServer(app);
 
 const PORT = process.env.PORT || 3000;
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173'; // Fallback for local testing
+// Define allowed origins for CORS (Render uses a single origin for a single deployment)
+const allowedOrigins = [CLIENT_URL, 'http://localhost:5173'];
 
-// --- Constants ---
 const QUESTION_TIME_MS = 10000; 
 const ANSWER_REVEAL_DELAY_MS = 3000; 
 
-const ALLOWED_ORIGINS = [
-    'http://localhost:5173', 
-    "https://prepify-exam-simulator.vercel.app/" 
-];
-
-// Initialize Socket.IO
+// Initialize Socket.IO with CORS using the CLIENT_URL variable
 const io = new SocketIOServer(httpServer, {
     cors: {
-        origin: ALLOWED_ORIGINS,
+        origin: allowedOrigins,
         methods: ["GET", "POST"]
-    }
+    },
+    pingTimeout: 20000, 
+    pingInterval: 5000 
 });
 
-// --- Express Middleware Setup ---
+// Express CORS setup
 app.use(cors({
-  origin: ALLOWED_ORIGINS,
+  origin: allowedOrigins,
   credentials: true
 }));
 
@@ -54,14 +53,11 @@ app.use("/api/generate", generateLimiter);
 
 app.use(express.json());
 
-// Routes (Standard Express routes)
 app.use("/api/auth", authRoutes); 
 app.use("/api", quizRoutes);      
 
 // === SERVER-SIDE ROOM STATE MANAGEMENT & GAME LOGIC ===
 const rooms = new Map();
-
-// Helper functions (omitted for brevity, assume they are correct based on prior step)
 
 const checkAllAnswered = (roomState) => {
     const totalPlayers = roomState.players.length;
@@ -81,11 +77,6 @@ const findRoomBySocketId = (socketId) => {
 const calculatePoints = (roomState) => {
     const qIndex = roomState.currentQ;
     const question = roomState.quizData[qIndex];
-
-    const playersAnswered = roomState.players.map(p => ({
-        ...p,
-        answer: p.answers[qIndex]
-    })).filter(p => p.answer);
 
     const BASE_SCORE = 100;
     const MAX_SPEED_BONUS = 50; 
@@ -165,8 +156,6 @@ const advanceGame = (roomCode, roomState) => {
     }
 };
 
-
-// === SOCKET.IO LOGIC ===
 io.on('connection', (socket) => {
     console.log('A user connected via socket:', socket.id);
 
@@ -230,24 +219,12 @@ io.on('connection', (socket) => {
                 return;
             }
             
-            // FIX APPLIED HERE: Check if questions is already an object/array (which happens if your database driver/ORm automatically parses it)
-            // If it's a string, then we parse it. Otherwise, we assume it's the correct object/array structure.
-            if (typeof quiz.questions === 'string') {
-                // If it's a string, attempt to parse. This is where the old error happened.
-                if (quiz.questions.startsWith('[')) {
-                   roomState.quizData = JSON.parse(quiz.questions); 
-                } else {
-                   // Fallback for improperly stored data (e.g., "[object Object]")
-                   console.error(`Invalid JSON data in DB for Quiz ID ${quizId}:`, quiz.questions);
-                   io.to(roomCode).emit('roomError', 'Quiz data is corrupted (invalid JSON).');
-                   return;
-                }
+            if (typeof quiz.questions === 'string' && quiz.questions.startsWith('[')) {
+               roomState.quizData = JSON.parse(quiz.questions); 
             } else if (Array.isArray(quiz.questions)) {
-                // If the ORM already gave us an array, use it directly.
                  roomState.quizData = quiz.questions; 
             } else {
-                 // Final fallback, might be poorly stored.
-                 console.error(`Quiz data for ID ${quizId} is not a string or array.`);
+                 console.error(`Quiz data for ID ${quizId} is not a valid structure.`);
                  io.to(roomCode).emit('roomError', 'Quiz data structure is invalid.');
                  return;
             }
@@ -313,6 +290,7 @@ io.on('connection', (socket) => {
         });
 
         if (checkAllAnswered(roomState)) {
+            if (roomState.qTimeout) clearTimeout(roomState.qTimeout);
             advanceGame(roomCode, roomState);
         }
     });
@@ -341,6 +319,7 @@ io.on('connection', (socket) => {
     });
 });
 
-httpServer.listen(PORT, () => {
+// CRITICAL RENDER FIX: Bind to '0.0.0.0' and the PORT env variable
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Prepify Server running on port ${PORT}`);
 });

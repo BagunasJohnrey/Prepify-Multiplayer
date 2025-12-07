@@ -9,6 +9,10 @@ const FREE_MODELS = [
   "openai/gpt-oss-20b:free" 
 ];
 
+// Determine the live domain of the backend service from Render's standard environment variables
+const RENDER_EXTERNAL_HOSTNAME = process.env.RENDER_EXTERNAL_HOSTNAME;
+const REFERER_URL = RENDER_EXTERNAL_HOSTNAME ? `https://${RENDER_EXTERNAL_HOSTNAME}` : "http://localhost:3000";
+
 export const generateQuizQuestions = async (prompt) => {
     let questions = null;
     let lastError = null;
@@ -22,8 +26,9 @@ export const generateQuizQuestions = async (prompt) => {
                 headers: {
                     "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
                     "Content-Type": "application/json",
-                    "HTTP-Referer": "http://localhost:3000",
-                    "X-Title": "Prepify App"
+                    // UPDATED: Use a dynamic referer/title based on the Render host
+                    "HTTP-Referer": REFERER_URL, 
+                    "X-Title": "Prepify App - Render Backend"
                 },
                 body: JSON.stringify({
                     model: model,
