@@ -159,7 +159,7 @@ const advanceGame = (roomCode, roomState) => {
 io.on('connection', (socket) => {
     console.log('A user connected via socket:', socket.id);
 
-    // 1. Create Room 
+    // 1. Create Room (FIXED)
     socket.on('createRoom', (data) => {
         const { username, quizId } = data;
         const roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -177,10 +177,11 @@ io.on('connection', (socket) => {
         };
         rooms.set(roomCode, roomState);
 
+        // FIX: Send update directly to the host (creator) as confirmation
         socket.emit('lobbyUpdate', roomState); 
     });
 
-    // 2. Join Room
+    // 2. Join Room (FIXED)
     socket.on('joinRoom', (data) => {
         const { roomCode, username } = data;
         const roomState = rooms.get(roomCode);
@@ -198,7 +199,13 @@ io.on('connection', (socket) => {
         socket.join(roomCode);
         roomState.players.push({ username, id: socket.id, score: 0, answers: [], lastScore: 0, socketId: socket.id });
 
-        io.to(roomCode).emit('lobbyUpdate', roomState); 
+        // CRITICAL FIX: Send the update directly to the joining socket (player) 
+        // to guarantee they transition out of the 'loading' view immediately.
+        socket.emit('lobbyUpdate', roomState);
+        
+        // Broadcast the update to all other members (the host) so they see the new player.
+        // socket.to(roomCode) ensures the sender does not receive the update again.
+        socket.to(roomCode).emit('lobbyUpdate', roomState); 
     });
 
     // 3. Start Game
@@ -319,7 +326,36 @@ io.on('connection', (socket) => {
     });
 });
 
+// Self-ping function to keep Render instance awake
+const RENDER_HOSTNAME = process.env.RENDER_EXTERNAL_HOSTNAME || 'localhost';
+const PING_URL = `https://${RENDER_HOSTNAME}`;
+const PING_INTERVAL = 600000; // 10 minutes
+
+function selfPing() {
+    if (RENDER_HOSTNAME === 'localhost' || RENDER_HOSTNAME === undefined) {
+        return;
+    }
+    
+    // Ping a lightweight endpoint to keep the server alive
+    fetch(PING_URL + '/api/quizzes', { 
+        headers: { 'User-Agent': 'Render-Self-Pinger' }
+    })
+        .then(response => {
+            console.log(`Self-ping successful: Status ${response.status}`);
+        })
+        .catch(err => {
+            console.error(`Self-ping failed: ${err.message}`);
+        });
+}
+
+
 // CRITICAL RENDER FIX: Bind to '0.0.0.0' and the PORT env variable
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Prepify Server running on port ${PORT}`);
+
+  // START SELF-PING ONLY IF A PUBLIC HOSTNAME IS AVAILABLE
+  if (RENDER_HOSTNAME !== 'localhost' && RENDER_HOSTNAME !== undefined) {
+      console.log(`Self-ping scheduled every ${PING_INTERVAL / 60000} minutes to ${PING_URL}`);
+      setInterval(selfPing, PING_INTERVAL);
+  }
 });
