@@ -4,20 +4,20 @@ import { Server as SocketIOServer } from 'socket.io';
 import cors from "cors";
 import dotenv from "dotenv";
 import rateLimit from "express-rate-limit"; 
-import path from "path"; 
-import { fileURLToPath } from "url"; 
 import authRoutes from "./routes/authRoutes.js";
 import quizRoutes from "./routes/quizRoutes.js";
 import Quiz from "./models/Quiz.js"; 
+import path from "path"; 
+import { fileURLToPath } from "url"; 
 
 dotenv.config();
+
+const app = express();
+const httpServer = createServer(app);
 
 // Helper to define __dirname in ES Modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const app = express();
-const httpServer = createServer(app);
 
 // CRITICAL FIX: Instruct Express to trust the proxy headers from Render/load balancer.
 app.set('trust proxy', 1);
