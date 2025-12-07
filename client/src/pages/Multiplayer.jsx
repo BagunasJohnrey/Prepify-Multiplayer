@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'; 
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Users, PlusCircle, LogIn, QrCode, Loader, Clock, Trophy, Zap, AlertCircle, CheckCircle, XCircle, Copy, Link as LinkIcon, Share2, User, KeyRound, ArrowRight, UserPlus } from 'lucide-react';
+import { Users, PlusCircle, LogIn, QrCode, Loader, Clock, Trophy, Zap, AlertCircle, CheckCircle, XCircle, Copy, Link as LinkIcon, Share2, User, KeyRound, ArrowRight, UserPlus, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -82,10 +82,8 @@ export default function Multiplayer() {
     // --- AUTH & INITIALIZATION LOGIC ---
     useEffect(() => {
         if (user) {
-            // User is logged in, skip guest entry
             if (view === 'loading' || view === 'guest_entry') setView('menu');
         } else {
-            // Not logged in: Show guest entry unless already set up
             if (!isGuestSetup && view !== 'guest_entry') {
                 setView('guest_entry');
             } else if (isGuestSetup && view === 'loading') {
@@ -94,12 +92,11 @@ export default function Multiplayer() {
         }
     }, [user, isGuestSetup, view]);
 
-    // --- Handle URL Params for Direct Join ---
+    // --- Handle URL Params ---
     useEffect(() => {
         const searchParams = new URLSearchParams(location.search);
         const codeParam = searchParams.get('code');
         
-        // Auto-join if code exists and we have a username (user or guest)
         if (codeParam && currentUsername && (view === 'menu' || view === 'guest_entry')) {
             setRoomCode(codeParam.toUpperCase());
             setView('join');
@@ -123,9 +120,9 @@ export default function Multiplayer() {
                 if (data.length > 0) {
                     setSelectedQuizId(String(data[0].id)); 
                 }
-            } catch (error) {
+            } catch {
+                // Fixed: Removed unused 'error' variable
                 toast.error("Failed to load quizzes.", { duration: 3000 });
-                console.error("Quiz fetch error:", error);
             } finally {
                 setQuizzesLoading(false);
             }
@@ -138,8 +135,8 @@ export default function Multiplayer() {
         if (view === 'loading' && isRoomActionPending) {
             roomActionTimeoutRef.current = setTimeout(() => {
                 toast.error("Room action timed out. Please retry.", { duration: 5000 });
-                setView('menu');
                 setIsRoomActionPending(false);
+                setView('menu');
             }, 15000); 
         } else {
             if (roomActionTimeoutRef.current) clearTimeout(roomActionTimeoutRef.current);
@@ -310,6 +307,14 @@ export default function Multiplayer() {
     }, []);
 
     // --- Actions ---
+    
+    const handleCancel = () => {
+        setIsRoomActionPending(false);
+        setRoomCode('');
+        setView('menu');
+        toast.dismiss();
+    };
+
     const handleGuestEntry = (e) => {
         e.preventDefault();
         if (!guestName.trim()) return toast.error("Please enter a name.");
@@ -375,7 +380,7 @@ export default function Multiplayer() {
 
     // --- RENDERERS ---
 
-    // 1. GUEST / LOGIN GATE
+    // 1. GUEST ENTRY
     const renderGuestEntry = () => (
         <div className="flex flex-col items-center justify-center space-y-8 animate-fade-in text-center">
             <div className="mb-4">
@@ -387,7 +392,6 @@ export default function Multiplayer() {
             </div>
 
             <div className="w-full max-w-sm space-y-8">
-                {/* Guest Option */}
                 <div className="space-y-4">
                     <form onSubmit={handleGuestEntry} className="space-y-3">
                         <Input 
@@ -408,7 +412,6 @@ export default function Multiplayer() {
                     <div className="relative flex justify-center text-sm"><span className="px-4 bg-dark-surface text-gray-500 font-bold tracking-wider">OR</span></div>
                 </div>
 
-                {/* Login Option */}
                 <Button onClick={() => navigate('/')} variant="outline" className="w-full h-12 border-gray-600 hover:bg-gray-800 text-gray-300">
                     <LogIn size={18} className="mr-2" /> Login / Register
                 </Button>
@@ -416,7 +419,7 @@ export default function Multiplayer() {
         </div>
     );
 
-    // 2. MAIN MENU
+    // 2. MAIN MENU (Redesigned)
     const renderMenu = () => (
         <div className="space-y-8 animate-fade-in">
             <div className="flex justify-between items-center pb-6 border-b border-gray-800">
@@ -428,16 +431,36 @@ export default function Multiplayer() {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Button onClick={() => setView('create')} variant="primary" className="flex flex-col items-center justify-center h-40 space-y-3 bg-linear-to-br from-blue-600 to-blue-800 hover:from-blue-500 hover:to-blue-700 border-none shadow-xl transform transition hover:-translate-y-1" disabled={isRoomActionPending || quizzesLoading || availableQuizzes.length === 0 || !isConnected}>
-                    <PlusCircle size={40} className="mb-2" />
-                    <span className="text-xl font-black">Create Room</span>
-                    <span className="text-sm text-blue-200 font-normal">Host a game for friends</span>
+                {/* Create Room Card - Fixed Gradient */}
+                <Button 
+                    onClick={() => setView('create')} 
+                    className="group relative flex flex-col items-center justify-center h-48 space-y-4 bg-linear-to-br from-blue-900/40 to-purple-900/40 border border-blue-500/30 hover:border-blue-400 rounded-3xl overflow-hidden transition-all hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(59,130,246,0.3)]"
+                    disabled={isRoomActionPending || quizzesLoading || availableQuizzes.length === 0 || !isConnected}
+                >
+                    <div className="absolute inset-0 bg-blue-600/10 group-hover:bg-blue-600/20 transition-all"></div>
+                    <div className="bg-blue-600 p-4 rounded-full shadow-lg shadow-blue-500/40 group-hover:scale-110 transition-transform">
+                        <PlusCircle size={32} className="text-white" />
+                    </div>
+                    <div className="text-center z-10">
+                        <span className="block text-2xl font-black text-white mb-1">Create Room</span>
+                        <span className="block text-sm text-blue-200 font-medium">Host a game for friends</span>
+                    </div>
                 </Button>
                 
-                <Button onClick={() => setView('join')} variant="outline" className="flex flex-col items-center justify-center h-40 space-y-3 border-2 border-gray-700 hover:border-neon-green hover:bg-gray-800/50 shadow-xl transform transition hover:-translate-y-1" disabled={isRoomActionPending || !isConnected}>
-                    <LogIn size={40} className="mb-2 text-neon-green" />
-                    <span className="text-xl font-black text-white">Join Room</span>
-                    <span className="text-sm text-gray-400 font-normal">Enter a code to play</span>
+                {/* Join Room Card - Fixed Gradient */}
+                <Button 
+                    onClick={() => setView('join')} 
+                    className="group relative flex flex-col items-center justify-center h-48 space-y-4 bg-linear-to-br from-gray-900 to-gray-800 border border-gray-700 hover:border-neon-green rounded-3xl overflow-hidden transition-all hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(34,197,94,0.15)]"
+                    disabled={isRoomActionPending || !isConnected}
+                >
+                    <div className="absolute inset-0 bg-green-500/5 group-hover:bg-green-500/10 transition-all"></div>
+                    <div className="bg-gray-800 border border-gray-600 group-hover:border-neon-green p-4 rounded-full shadow-lg group-hover:scale-110 transition-transform">
+                        <LogIn size={32} className="text-neon-green" />
+                    </div>
+                    <div className="text-center z-10">
+                        <span className="block text-2xl font-black text-white mb-1">Join Room</span>
+                        <span className="block text-sm text-gray-400 font-medium group-hover:text-gray-300">Enter a code to play</span>
+                    </div>
                 </Button>
             </div>
             
@@ -445,34 +468,36 @@ export default function Multiplayer() {
         </div>
     );
 
-    // 3. JOIN ROOM UI (IMPROVED)
+    // 3. JOIN ROOM (Redesigned)
     const renderJoinRoom = () => (
         <form onSubmit={handleJoinRoom} className="space-y-8 animate-fade-in text-center max-w-sm mx-auto">
             <div className="mb-8">
-                <div className="w-16 h-16 bg-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-700">
+                <div className="w-16 h-16 bg-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-700 shadow-xl">
                     <KeyRound size={32} className="text-neon-green" />
                 </div>
                 <h2 className="text-3xl font-black text-white">Join Game</h2>
                 <p className="text-gray-400">Enter the 4-character code below.</p>
             </div>
 
-            <div className="relative">
+            <div className="relative group">
+                <div className="absolute inset-0 bg-neon-green/20 blur-xl rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500"></div>
                 <Input 
                     type="text" 
                     placeholder="CODE" 
                     value={roomCode} 
                     onChange={e => setRoomCode(e.target.value.toUpperCase())} 
                     maxLength={4} 
-                    className="text-center text-5xl font-mono font-black uppercase tracking-[0.5em] h-24 bg-gray-900 border-2 border-gray-700 focus:border-neon-green rounded-2xl placeholder-gray-800"
+                    className="relative text-center text-5xl font-mono font-black uppercase tracking-[0.3em] h-24 bg-gray-900/90 border-2 border-gray-700 focus:border-neon-green rounded-2xl placeholder-gray-800 text-white shadow-2xl transition-all"
                 />
             </div>
 
-            <div className="space-y-3 pt-4">
-                <Button type="submit" variant="primary" className="w-full h-14 text-lg font-bold bg-neon-green hover:bg-green-500 text-black shadow-[0_0_20px_rgba(34,197,94,0.3)]" disabled={isRoomActionPending || roomCode.length !== 4}>
-                    Enter Room
+            <div className="space-y-3 pt-6">
+                <Button type="submit" variant="primary" className="w-full h-14 text-lg font-bold bg-neon-green hover:bg-green-500 text-black shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all hover:scale-[1.02]" disabled={isRoomActionPending || roomCode.length !== 4}>
+                    Enter Room <ArrowRight className="ml-2" />
                 </Button>
-                <Button type="button" onClick={() => setView('menu')} variant="ghost" className="w-full text-gray-500 hover:text-white" disabled={isRoomActionPending}>
-                    Cancel
+                {/* Cancel Button - Force Enabled */}
+                <Button type="button" onClick={handleCancel} variant="ghost" className="w-full text-gray-500 hover:text-white" disabled={false}>
+                    <ArrowLeft size={16} className="mr-2" /> Cancel
                 </Button>
             </div>
         </form>
@@ -486,16 +511,24 @@ export default function Multiplayer() {
             {quizzesLoading ? <div className="text-center text-neon-blue">Loading Quizzes...</div> : (
                 <>
                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Quiz Material</label>
-                    <select value={selectedQuizId || ''} onChange={(e) => setSelectedQuizId(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-xl p-4 text-white focus:border-neon-purple outline-none cursor-pointer text-lg">
-                        {availableQuizzes.map(quiz => (
-                            <option key={quiz.id} value={String(quiz.id)}>{quiz.title} ({quiz.difficulty})</option>
-                        ))}
-                    </select>
+                    <div className="relative">
+                        <select value={selectedQuizId || ''} onChange={(e) => setSelectedQuizId(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-xl p-4 text-white focus:border-neon-purple outline-none cursor-pointer text-lg appearance-none shadow-sm hover:border-gray-500 transition-colors">
+                            {availableQuizzes.map(quiz => (
+                                <option key={quiz.id} value={String(quiz.id)}>{quiz.title} ({quiz.difficulty})</option>
+                            ))}
+                        </select>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">▼</div>
+                    </div>
                 </>
             )}
             <div className="pt-6 space-y-3">
-                <Button type="submit" variant="success" className="w-full h-14 text-lg font-bold" disabled={isRoomActionPending}>Create Lobby</Button>
-                <Button type="button" onClick={() => setView('menu')} variant="outline" className="w-full" disabled={isRoomActionPending}>Back</Button>
+                <Button type="submit" variant="success" className="w-full h-14 text-lg font-bold shadow-lg shadow-purple-500/20" disabled={isRoomActionPending}>
+                    Create Lobby <ArrowRight className="ml-2" />
+                </Button>
+                {/* Cancel Button - Force Enabled */}
+                <Button type="button" onClick={handleCancel} variant="outline" className="w-full border-gray-700 text-gray-400 hover:text-white hover:bg-gray-800" disabled={false}>
+                    Cancel
+                </Button>
             </div>
         </form>
     );
@@ -514,7 +547,6 @@ export default function Multiplayer() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Left: Player List */}
                     <div className="bg-gray-900/50 p-4 rounded-2xl border border-gray-700">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
@@ -537,7 +569,6 @@ export default function Multiplayer() {
                         </div>
                     </div>
 
-                    {/* Right: Invite Options */}
                     <div className="bg-gray-900/50 p-4 rounded-2xl border border-gray-700 flex flex-col items-center text-center space-y-6">
                         <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
                             <Share2 size={16} /> Invite Friends
@@ -546,7 +577,7 @@ export default function Multiplayer() {
                              <QRCodeSVG value={inviteLink} size={120} level={"H"} />
                         </div>
                         <div className="w-full space-y-3">
-                            <div className="flex items-center gap-2 bg-black/40 p-1.5 pr-3 rounded-xl border border-gray-700">
+                            <div className="flex items-center gap-2 bg-black/40 p-1.5 pr-3 rounded-xl border border-gray-700 group hover:border-neon-blue transition-colors">
                                 <div className="bg-gray-800 px-3 py-2 rounded-lg text-neon-green font-mono font-bold text-xl tracking-widest border border-gray-700">
                                     {lobbyData.roomCode}
                                 </div>
@@ -555,7 +586,7 @@ export default function Multiplayer() {
                                     {copiedField === 'code' ? <CheckCircle size={20} className="text-green-500" /> : <Copy size={20} />}
                                 </button>
                             </div>
-                            <div className="flex items-center gap-2 bg-black/40 p-2 rounded-xl border border-gray-700 cursor-pointer" onClick={() => copyToClipboard(inviteLink, 'link')}>
+                            <div className="flex items-center gap-2 bg-black/40 p-2 rounded-xl border border-gray-700 cursor-pointer group hover:border-neon-blue transition-colors" onClick={() => copyToClipboard(inviteLink, 'link')}>
                                 <div className="bg-gray-800 p-2 rounded-lg text-neon-blue border border-gray-700"><LinkIcon size={18} /></div>
                                 <div className="flex-1 text-left">
                                     <div className="text-xs text-gray-500 font-medium">Direct Link</div>
@@ -571,7 +602,7 @@ export default function Multiplayer() {
 
                 <div className="pt-4 border-t border-gray-800 flex flex-col gap-3">
                     {lobbyData.host === currentUsername ? (
-                        <Button onClick={handleStartGame} variant="success" className="w-full justify-center h-14 text-lg">Start Game</Button>
+                        <Button onClick={handleStartGame} variant="success" className="w-full justify-center h-14 text-lg shadow-lg shadow-green-500/20">Start Game</Button>
                     ) : (
                         <div className="w-full py-4 text-center bg-gray-900 rounded-xl border border-gray-700 text-neon-blue font-bold animate-pulse">Waiting for Host to Start...</div>
                     )}
@@ -619,6 +650,7 @@ export default function Multiplayer() {
                 <div className="flex justify-between items-center pb-4 border-b border-gray-800">
                     <h3 className="text-xl font-mono text-gray-400">Q<span className="text-white font-bold">{currentQIndex + 1}</span>/{gameQuestions.length}</h3>
                     <div className="flex items-center gap-4 text-white">
+                        {/* Fixed: mb-px canonical class */}
                         <span className={`font-bold flex items-center gap-1.5 leading-none ${timeLeft <= 3 ? 'text-red-500 animate-pulse' : 'text-neon-blue'}`}>
                             <Clock size={18} className="mb-px" /> {timeLeft > 0 ? timeLeft : 0}s
                         </span>
