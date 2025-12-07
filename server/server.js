@@ -333,9 +333,9 @@ io.on('connection', (socket) => {
 
 // ----------------------------------------------------
 // FIX 3: SPA Fallback Route (Express 5 Compatible)
-// Replaced '*' with '(.*)' to fix "Missing parameter name" error.
+// Replaced '(.*)' with '/:path*' to fix "Missing parameter name" error.
 // This matches any route not previously handled and serves index.html.
-app.get('(.*)', (req, res) => {
+app.get('/:path*', (req, res) => {
     // Safety check: ensure we don't accidentally intercept API calls
     if (req.originalUrl.startsWith('/api')) {
         return res.status(404).json({ error: "API endpoint not found" });
