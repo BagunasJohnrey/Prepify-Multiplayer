@@ -21,8 +21,8 @@
       "destination": "/server/server.js"
     },
     {
-      "source": "/(.*)",
-      "destination": "/client/index.html"
+      "source": "/((?!assets/|.*\\..*).*)",
+      "destination": "/index.html"
     }
   ]
 }
