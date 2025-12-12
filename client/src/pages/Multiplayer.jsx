@@ -11,8 +11,8 @@ import Confetti from 'react-confetti';
 import { QRCodeSVG } from 'qrcode.react';
 
 const COUNTDOWN_SECONDS = 5; 
-const QUESTION_TIME_MS = 10000; 
-const ANSWER_REVEAL_DELAY_MS = 3000; 
+const QUESTION_TIME_MS = 20000; 
+const ANSWER_REVEAL_DELAY_MS = 5000; 
 
 export default function Multiplayer() {
     const { user, loading: authLoading } = useAuth();
