@@ -120,6 +120,9 @@ export default function Quiz() {
       setSelected(null);
       setIsAnswered(false);
       setShowXpGain(false); // Reset animation state
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      
     } else {
       handleFinish();
     }
