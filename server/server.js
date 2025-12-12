@@ -26,8 +26,8 @@ const PORT = process.env.PORT || 3000;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173'; 
 const allowedOrigins = [CLIENT_URL, 'http://localhost:5173'];
 
-const QUESTION_TIME_MS = 10000; 
-const ANSWER_REVEAL_DELAY_MS = 3000; 
+const QUESTION_TIME_MS = 20000; 
+const ANSWER_REVEAL_DELAY_MS = 5000; 
 
 // Initialize Socket.IO with CORS using the CLIENT_URL variable
 const io = new SocketIOServer(httpServer, {
