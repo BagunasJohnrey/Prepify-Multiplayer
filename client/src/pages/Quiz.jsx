@@ -13,7 +13,7 @@ export default function Quiz() {
   const [quiz, setQuiz] = useState(null);
   const [currentQ, setCurrentQ] = useState(0);
   const [score, setScore] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(600); 
+  const [timeLeft, setTimeLeft] = useState(1200); 
   
   const [selected, setSelected] = useState(null);
   const [isAnswered, setIsAnswered] = useState(false);
