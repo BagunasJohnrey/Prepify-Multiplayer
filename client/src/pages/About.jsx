@@ -1,4 +1,3 @@
-import { useEffect } from 'react'; // UPDATED: Added Import
 import { Brain, Zap, Target, ShieldCheck } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
@@ -8,14 +7,11 @@ export default function About() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // UPDATED: Added Auto-Redirect Effect
-  useEffect(() => {
-    if (user) {
-      navigate('/dashboard', { replace: true });
-    }
-  }, [user, navigate]);
+  // UPDATED: REMOVED the useEffect auto-redirect block here.
+  // Now, logged-in users can stay on this page.
 
   const handleStartLearning = () => {
+    // Users are only redirected if they click this button
     if (user) {
       navigate('/dashboard');
     } else {
