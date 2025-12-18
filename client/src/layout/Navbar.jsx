@@ -69,7 +69,8 @@ export default function Navbar({ onOpenLogout }) {
             </div>
           ) : (
             <div className="flex gap-3">
-              <Link to="/" className="text-gray-300 hover:text-white px-4 py-2 text-sm font-bold">Login</Link>
+              {/* UPDATED: Link points to /login */}
+              <Link to="/login" className="text-gray-300 hover:text-white px-4 py-2 text-sm font-bold">Login</Link>
               <Link to="/register" className="bg-neon-blue text-black hover:bg-[#00d4ff] px-5 py-2 rounded-full text-sm font-bold transition shadow-[0_0_15px_rgba(0,243,255,0.3)]">
                 Get Started
               </Link>
@@ -102,7 +103,8 @@ export default function Navbar({ onOpenLogout }) {
               </button>
             ) : (
               <div className="flex flex-col gap-3">
-                <Link to="/" className="text-center text-white border border-gray-700 py-3 rounded-xl" onClick={() => setIsOpen(false)}>Login</Link>
+                {/* UPDATED: Link points to /login */}
+                <Link to="/login" className="text-center text-white border border-gray-700 py-3 rounded-xl" onClick={() => setIsOpen(false)}>Login</Link>
                 <Link to="/register" className="text-center bg-neon-blue text-black py-3 rounded-xl font-bold" onClick={() => setIsOpen(false)}>Sign Up</Link>
               </div>
             )}
