@@ -173,7 +173,7 @@ export default function Dashboard() {
           
           <div>
             <h1 className="text-3xl font-bold text-white mb-2">
-              Welcome back, <span className="text-neon-blue">{user.username}</span>
+              Welcome back, <span className="text-neon-blue">{user.username}!</span>
             </h1>
             <p className="text-gray-400 text-sm">
                Level <span className="text-white font-bold">{Math.floor((user.xp || 0) / 100) + 1}</span> • <span className="text-neon-green font-bold">{user.xp || 0} XP</span>
