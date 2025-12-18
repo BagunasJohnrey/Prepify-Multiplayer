@@ -34,10 +34,9 @@ export default function Navbar({ onOpenLogout }) {
 
         {/* Desktop Navigation - CENTERED ABSOLUTELY */}
         <div className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center gap-8 font-medium text-sm">
-          {/* About is visible only when logged out */}
-          {!user && (
-            <Link to="/about" className={`${isActive('/about')} transition`}>About</Link>
-          )}
+          
+          {/* UPDATED: Removed {!user &&} check so everyone sees About */}
+          <Link to="/about" className={`${isActive('/about')} transition`}>About</Link>
           
           <Link to="/documentation" className={`${isActive('/documentation')} transition`}>Documentation</Link>
           
@@ -87,7 +86,9 @@ export default function Navbar({ onOpenLogout }) {
       {/* Mobile Menu Dropdown */}
       {isOpen && (
         <div className="md:hidden absolute top-16 left-0 w-full bg-dark-surface border-b border-gray-800 p-6 flex flex-col gap-4 shadow-2xl animate-fade-in-down">
-          {!user && <Link to="/about" className="text-white py-2" onClick={() => setIsOpen(false)}>About</Link>}
+          
+          {/* UPDATED: Removed {!user &&} check */}
+          <Link to="/about" className="text-white py-2" onClick={() => setIsOpen(false)}>About</Link>
           
           <Link to="/documentation" className="text-white py-2" onClick={() => setIsOpen(false)}>Documentation</Link>
           
