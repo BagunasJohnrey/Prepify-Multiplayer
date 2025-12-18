@@ -30,17 +30,27 @@ export default function Quiz() {
     setHearts(user.hearts);
   }
 
-  useEffect(() => {
-    api.get(`/quiz/${id}`)
-      .then(res => {
-        const randomized = {
-          ...res.data,
-          questions: res.data.questions.sort(() => Math.random() - 0.5)
-        };
-        setQuiz(randomized);
-      })
-      .catch(() => navigate('/dashboard'));
-  }, [id, navigate]);
+useEffect(() => {
+api.get(`/quiz/${id}`)
+  .then(res => {
+    // 1. Shuffle questions order
+    const shuffledQuestions = res.data.questions.sort(() => Math.random() - 0.5);
+
+    // 2. Shuffle options WITHIN each question
+    shuffledQuestions.forEach(q => {
+        if (q.options) {
+            q.options.sort(() => Math.random() - 0.5);
+        }
+    });
+
+    const randomized = {
+      ...res.data,
+      questions: shuffledQuestions
+    };
+    setQuiz(randomized);
+  })
+  .catch(() => navigate('/dashboard'));
+}, [id, navigate]);
 
   const handleFinish = useCallback(() => {
     if (!quiz) return;
