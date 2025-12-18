@@ -43,7 +43,7 @@ export default function Login() {
           <Input 
             label="Password"
             type="password" 
-            placeholder="••••••••"
+            placeholder="Please enter your password"
             value={formData.password}
             onChange={e => setFormData({...formData, password: e.target.value})}
           />
