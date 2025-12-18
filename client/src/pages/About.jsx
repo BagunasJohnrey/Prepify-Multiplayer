@@ -1,3 +1,4 @@
+import { useEffect } from 'react'; // UPDATED: Added Import
 import { Brain, Zap, Target, ShieldCheck } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
@@ -6,6 +7,13 @@ import { useAuth } from '../context/AuthContext';
 export default function About() {
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  // UPDATED: Added Auto-Redirect Effect
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, navigate]);
 
   const handleStartLearning = () => {
     if (user) {
