@@ -45,14 +45,15 @@ export default function App() {
           
           <Routes>
             {/* Public Routes */}
-            <Route path="/" element={<Login />} />
+            <Route path="/" element={<About />} />       {/* Root now shows About */}
+            <Route path="/login" element={<Login />} />  {/* Login moved to /login */}
             <Route path="/register" element={<Register />} />
             <Route path="/about" element={<About />} />
             <Route path="/documentation" element={<Documentation />} />
             <Route path="/multiplayer" element={<Multiplayer />} />
 
             {/* Protected Routes */}
-            <Route element={<ProtectedRoute />}>
+              <Route element={<ProtectedRoute />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/quiz/:id" element={<Quiz />} />
               <Route path="/result" element={<Result />} />
