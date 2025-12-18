@@ -219,7 +219,13 @@ export default function Multiplayer() {
         };
 
         const handleStartCountdown = (data) => {
-            setGameQuestions(data.quizData);
+            // Shuffle options for every question received
+            const shuffledQuizData = data.quizData.map(q => ({
+                ...q,
+                options: [...q.options].sort(() => Math.random() - 0.5)
+            }));
+            
+            setGameQuestions(shuffledQuizData);
             setCurrentQIndex(0);
             setIsAnswered(false);
             setShowAnswerKey(false);
