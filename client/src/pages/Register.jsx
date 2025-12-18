@@ -18,7 +18,8 @@ export default function Register() {
       
       toast.success("Account created! Please log in.", { duration: 3000 });
       
-      navigate('/');
+      // UPDATED: Redirect to /login instead of / (About page)
+      navigate('/login');
     } catch (err) {
       toast.error(err.response?.data?.error || "Registration failed. Username may already exist.", { duration: 3000 });
     } finally {
@@ -52,7 +53,8 @@ export default function Register() {
           </Button>
         </form>
 
-        <Link to="/" className="block text-center mt-6 text-gray-500 hover:text-white transition text-sm">
+        {/* UPDATED: Link points to /login instead of / */}
+        <Link to="/login" className="block text-center mt-6 text-gray-500 hover:text-white transition text-sm">
           Already have an account? <span className="text-neon-blue font-bold">Log In</span>
         </Link>
       </div>
