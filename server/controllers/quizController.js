@@ -3,6 +3,7 @@ import Quiz from "../models/Quiz.js";
 import { parsePDFBuffer } from "../utils/pdfParser.js";
 import { generateQuizQuestions } from "../utils/aiService.js";
 
+// Schema for validating AI response
 const QuizSchema = z.array(z.object({
   question: z.string(),
   options: z.array(z.string()).length(4),
@@ -40,11 +41,15 @@ export const deleteQuiz = async (req, res) => {
     }
 };
 
+// Unified generateQuiz with Batching Support for 50 questions
 export const generateQuiz = async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No PDF uploaded" });
   
   const { course, customTitle, numQuestions, difficulty, description } = req.body;
-  const questionLimit = numQuestions || 10;
+  const totalQuestionsNeeded = parseInt(numQuestions) || 10;
+  
+  // Batch size of 10 is the most stable for free-tier APIs
+  const BATCH_SIZE = 10; 
 
   try {
     console.log("1. Parsing PDF...");
@@ -54,49 +59,62 @@ export const generateQuiz = async (req, res) => {
       throw new Error("Not enough text extracted. The PDF might be scanned images.");
     }
 
-    const truncatedText = text.length > 25000 
-        ? text.substring(0, 25000) 
-        : text;
+    const truncatedText = text.length > 25000 ? text.substring(0, 25000) : text;
 
-    const prompt = `
-      Create a strictly valid JSON exam based on the text below.
+    let allQuestions = [];
+    const numBatches = Math.ceil(totalQuestionsNeeded / BATCH_SIZE);
+
+    console.log(`2. Starting Batched Generation (${numBatches} total batches)...`);
+
+    for (let i = 0; i < numBatches; i++) {
+      const remainingNeeded = totalQuestionsNeeded - allQuestions.length;
+      const currentBatchCount = Math.min(BATCH_SIZE, remainingNeeded);
+
+      const prompt = `
+        Create a strictly valid JSON exam based on the text below.
+        
+        CONTEXT:
+        - Course Type: ${course}
+        - Difficulty: ${difficulty}
+        - Description/Focus: ${description || "General coverage"}
+        - Count: ${currentBatchCount} questions.
+        - Batch Info: This is batch ${i + 1} of ${numBatches}. 
+        
+        RULES:
+        1. Return ONLY a JSON array. No Markdown blocks, no intro/outro.
+        2. Multiple Choice: Exactly 4 options.
+        3. Do not use "All of the above" or "None of the above".
+        4. The "answer" field must MATCH exactly one of the strings in "options".
+        5. Provide a short "explanation".
+        6. [CRITICAL] Ensure all 4 options are of similar length.
+
+        JSON FORMAT:
+        [
+          {
+            "question": "Question text here?",
+            "options": ["A", "B", "C", "D"], 
+            "answer": "A", 
+            "explanation": "..."
+          }
+        ]
+
+        TEXT DATA:
+        ${truncatedText}
+      `;
+
+      console.log(`>> Generating Batch ${i + 1}/${numBatches} (${currentBatchCount} questions)...`);
+      const batchQuestions = await generateQuizQuestions(prompt);
       
-      CONTEXT:
-      - Course Type: ${course}
-      - Difficulty: ${difficulty}
-      - Description/Focus: ${description || "General coverage"}
-      - Count: ${questionLimit} questions.
-      
-      RULES:
-      1. Return ONLY a JSON array. No Markdown blocks (no \`\`\`), no introduction, no conclusion.
-      2. Multiple Choice: Must have exactly 4 options.
-      3. [IMPORTANT] Do not use "All of the above", "None of the above", or "Both A and B" as options, because the frontend randomizes the order of options.
-      4. The "answer" field must MATCH exactly one of the strings in "options".
-      5. Provide a short "explanation" for why the answer is correct.
-      6. [CRITICAL] Ensure all 4 options are of similar length and complexity. Do not make the correct answer significantly longer or more detailed than the distractors.
+      if (Array.isArray(batchQuestions)) {
+        allQuestions = [...allQuestions, ...batchQuestions];
+      }
+    }
 
-      JSON FORMAT:
-      [
-        {
-          "question": "Question text here?",
-          "options": ["Option A", "Option B", "Option C", "Option D"], 
-          "answer": "Option A", 
-          "explanation": "Because..."
-        }
-      ]
-
-      TEXT DATA:
-      ${truncatedText}
-    `;
-
-    console.log("2. Sending to OpenRouter...");
-    const questions = await generateQuizQuestions(prompt);
-
-    const validation = QuizSchema.safeParse(questions);
-    
+    // Validate the complete combined array
+    const validation = QuizSchema.safeParse(allQuestions);
     if (!validation.success) {
-        console.error("AI Validation Failed:", JSON.stringify(validation.error.format(), null, 2));
-        throw new Error("AI generated invalid quiz format. Please try again.");
+        console.error("Batch Validation Failed:", JSON.stringify(validation.error.format(), null, 2));
+        throw new Error("AI generated an invalid format in one of the batches.");
     }
 
     console.log("3. Saving to Database...");
@@ -107,8 +125,8 @@ export const generateQuiz = async (req, res) => {
         course, 
         difficulty, 
         description, 
-        JSON.stringify(questions), 
-        questions.length
+        JSON.stringify(allQuestions), 
+        allQuestions.length
     );
 
     console.log("4. Success!");
