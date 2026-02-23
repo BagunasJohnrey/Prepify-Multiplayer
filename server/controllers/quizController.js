@@ -47,8 +47,6 @@ export const generateQuiz = async (req, res) => {
   
   const { course, customTitle, numQuestions, difficulty, description } = req.body;
   const totalQuestionsNeeded = parseInt(numQuestions) || 10;
-  
-  // Batch size of 10 is the most stable for free-tier APIs
   const BATCH_SIZE = 10; 
 
   try {
@@ -56,10 +54,10 @@ export const generateQuiz = async (req, res) => {
     const text = await parsePDFBuffer(req.file.buffer);
     
     if (text.length < 50) {
-      throw new Error("Not enough text extracted. The PDF might be scanned images.");
+      throw new Error("Not enough text extracted.");
     }
 
-    const truncatedText = text.length > 25000 ? text.substring(0, 25000) : text;
+    const truncatedText = text.length > 15000 ? text.substring(0, 15000) : text;
 
     let allQuestions = [];
     const numBatches = Math.ceil(totalQuestionsNeeded / BATCH_SIZE);
@@ -70,6 +68,9 @@ export const generateQuiz = async (req, res) => {
       const remainingNeeded = totalQuestionsNeeded - allQuestions.length;
       const currentBatchCount = Math.min(BATCH_SIZE, remainingNeeded);
 
+      // Extract only the question text from previous batches to keep prompt size small
+      const existingQuestionTexts = allQuestions.map(q => q.question).join("\n- ");
+
       const prompt = `
         Create a strictly valid JSON exam based on the text below.
         
@@ -78,20 +79,22 @@ export const generateQuiz = async (req, res) => {
         - Difficulty: ${difficulty}
         - Description/Focus: ${description || "General coverage"}
         - Count: ${currentBatchCount} questions.
-        - Batch Info: This is batch ${i + 1} of ${numBatches}. 
+        - Batch Info: Batch ${i + 1} of ${numBatches}. 
+
+        ${allQuestions.length > 0 ? `[CRITICAL] DO NOT repeat the following questions:
+        - ${existingQuestionTexts}` : ""}
         
         RULES:
-        1. Return ONLY a JSON array. No Markdown blocks, no intro/outro.
+        1. Return ONLY a JSON array. No Markdown blocks.
         2. Multiple Choice: Exactly 4 options.
-        3. Do not use "All of the above" or "None of the above".
+        3. No "All of the above" or "None of the above".
         4. The "answer" field must MATCH exactly one of the strings in "options".
         5. Provide a short "explanation".
-        6. [CRITICAL] Ensure all 4 options are of similar length.
 
         JSON FORMAT:
         [
           {
-            "question": "Question text here?",
+            "question": "Unique Question text?",
             "options": ["A", "B", "C", "D"], 
             "answer": "A", 
             "explanation": "..."
@@ -102,7 +105,7 @@ export const generateQuiz = async (req, res) => {
         ${truncatedText}
       `;
 
-      console.log(`>> Generating Batch ${i + 1}/${numBatches} (${currentBatchCount} questions)...`);
+      console.log(`>> Generating Batch ${i + 1}/${numBatches}...`);
       const batchQuestions = await generateQuizQuestions(prompt);
       
       if (Array.isArray(batchQuestions)) {
@@ -110,28 +113,14 @@ export const generateQuiz = async (req, res) => {
       }
     }
 
-    // Validate the complete combined array
+    // Final Validation and DB Save
     const validation = QuizSchema.safeParse(allQuestions);
-    if (!validation.success) {
-        console.error("Batch Validation Failed:", JSON.stringify(validation.error.format(), null, 2));
-        throw new Error("AI generated an invalid format in one of the batches.");
-    }
+    if (!validation.success) throw new Error("AI generated invalid format.");
 
-    console.log("3. Saving to Database...");
     const title = customTitle || `Exam - ${new Date().toLocaleDateString()}`;
-    
-    const newQuiz = await Quiz.create(
-        title, 
-        course, 
-        difficulty, 
-        description, 
-        JSON.stringify(allQuestions), 
-        allQuestions.length
-    );
+    const newQuiz = await Quiz.create(title, course, difficulty, description, JSON.stringify(allQuestions), allQuestions.length);
 
-    console.log("4. Success!");
     res.json(newQuiz);
-
   } catch (err) {
     console.error("GENERATION ERROR:", err);
     res.status(500).json({ error: "Failed to generate quiz. " + err.message });
