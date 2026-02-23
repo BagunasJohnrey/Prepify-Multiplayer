@@ -41,7 +41,7 @@ export const deleteQuiz = async (req, res) => {
     }
 };
 
-// Unified generateQuiz with Batching Support and Socket.io Progress
+// Unified generateQuiz with Chunking, Batching, and Socket.io Progress
 export const generateQuiz = async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No PDF uploaded" });
   
@@ -57,18 +57,21 @@ export const generateQuiz = async (req, res) => {
       throw new Error("Not enough text extracted.");
     }
 
-    const truncatedText = text.length > 15000 ? text.substring(0, 15000) : text;
+    // 1. Define a maximum safe limit for the entire text (e.g., 60k chars)
+    const maxTextLength = 60000;
+    const safeText = text.length > maxTextLength ? text.substring(0, maxTextLength) : text;
 
     let allQuestions = [];
     const numBatches = Math.ceil(totalQuestionsNeeded / BATCH_SIZE);
 
-    // Get the socketio instance attached to the app in server.js
+    // 2. Calculate how large each text chunk should be based on the number of batches
+    const chunkSize = Math.ceil(safeText.length / numBatches);
+
     const io = req.app.get('socketio');
 
     console.log(`2. Starting Batched Generation (${numBatches} total batches)...`);
 
     for (let i = 0; i < numBatches; i++) {
-      // ADDED: Emit progress event to the specific user over Socket.io
       if (io && req.user && req.user.id) {
          io.emit(`generateProgress_${req.user.id}`, { 
            current: i + 1, 
@@ -79,17 +82,24 @@ export const generateQuiz = async (req, res) => {
       const remainingNeeded = totalQuestionsNeeded - allQuestions.length;
       const currentBatchCount = Math.min(BATCH_SIZE, remainingNeeded);
 
+      // 3. Extract the specific chunk of text for THIS batch
+      const startIdx = i * chunkSize;
+      // Add a 500-character overlap to the endIdx so we don't cut off mid-sentence
+      const endIdx = Math.min((i + 1) * chunkSize + 500, safeText.length);
+      const batchText = safeText.substring(startIdx, endIdx);
+
       const existingQuestionTexts = allQuestions.map(q => q.question).join("\n- ");
 
+      // Note: We now feed it `batchText` instead of the whole `truncatedText`
       const prompt = `
-        Create a strictly valid JSON exam based on the text below.
+        Create a strictly valid JSON exam based on the text segment below.
         
         CONTEXT:
         - Course Type: ${course}
         - Difficulty: ${difficulty}
         - Description/Focus: ${description || "General coverage"}
         - Count: ${currentBatchCount} questions.
-        - Batch Info: Batch ${i + 1} of ${numBatches}. 
+        - Document Progress: You are reading segment ${i + 1} out of ${numBatches}.
 
         ${allQuestions.length > 0 ? `[CRITICAL] DO NOT repeat the following questions:
         - ${existingQuestionTexts}` : ""}
@@ -111,11 +121,11 @@ export const generateQuiz = async (req, res) => {
           }
         ]
 
-        TEXT DATA:
-        ${truncatedText}
+        TEXT DATA (SEGMENT ${i + 1}):
+        ${batchText}
       `;
 
-      console.log(`>> Generating Batch ${i + 1}/${numBatches}...`);
+      console.log(`>> Generating Batch ${i + 1}/${numBatches}... (Text length: ${batchText.length})`);
       const batchQuestions = await generateQuizQuestions(prompt);
       
       if (Array.isArray(batchQuestions)) {
