@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import api from '../utils/api'; 
 import { useAuth } from '../context/AuthContext'; 
 import StoreModal from '../components/StoreModal';
+import socket from '../utils/socket'; // <-- ADDED: Import socket instance
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -23,6 +24,9 @@ export default function Dashboard() {
   const [quizzes, setQuizzes] = useState([]);
   const [loading, setLoading] = useState(false);
   
+  // NEW: State for tracking generation progress
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
+
   // Store & Timer State
   const [showStore, setShowStore] = useState(false);
   const [timeUntilRegen, setTimeUntilRegen] = useState(null);
@@ -41,6 +45,19 @@ export default function Dashboard() {
     if (user) fetchQuizzes(); 
   }, [fetchQuizzes, user]);
 
+  // NEW LOGIC: Listen for Socket.io progress events
+  useEffect(() => {
+    if (!user) return;
+
+    const eventName = `generateProgress_${user.id}`;
+    
+    socket.on(eventName, (data) => {
+      setProgress({ current: data.current, total: data.total });
+    });
+
+    return () => socket.off(eventName);
+  }, [user]);
+
   // Heart Timer Logic
   useEffect(() => {
     if (!user || user.hearts >= 3) {
@@ -58,7 +75,6 @@ export default function Dashboard() {
         
         setTimeUntilRegen(remaining);
 
-        // Sync with server slightly after a heart should have regen'd
         if (remaining <= 1000) refreshUser();
 
     }, 1000);
@@ -95,9 +111,7 @@ export default function Dashboard() {
 
     try {
         await api.post('/auth/buy-heart');
-       
         refreshUser(); 
-        
     } catch (err) {
         setUser(previousUser);
         toast.error(err.response?.data?.error || "Failed to buy heart");
@@ -109,6 +123,9 @@ export default function Dashboard() {
     if (!config.customTitle.trim()) return toast.error("Please enter a name for this exam.");
     
     setLoading(true);
+    // Initialize progress display
+    setProgress({ current: 1, total: Math.ceil(config.numQuestions / 10) });
+
     const formData = new FormData();
     formData.append('pdfFile', file);
     formData.append('course', config.course);
@@ -128,6 +145,7 @@ export default function Dashboard() {
       toast.error("Error generating quiz. Please try again.");
     } finally {
       setLoading(false);
+      setProgress({ current: 0, total: 0 }); // Reset progress display
     }
   };
 
@@ -144,7 +162,6 @@ export default function Dashboard() {
     }
   };
   
-  // NEW LOGIC: Prevent starting quiz if hearts are zero
   const handleQuizClick = (quizId) => {
     if (user.hearts <= 0) {
         toast.error("💔 You need at least one heart to start an exam.", { duration: 3000 });
@@ -181,7 +198,6 @@ export default function Dashboard() {
           </div>
 
           <div className="flex gap-4">
-              {/* Heart Status */}
               <div className="flex items-center gap-4 bg-gray-900/50 px-6 py-4 rounded-2xl border border-gray-700 backdrop-blur-md">
                   <div className="bg-gray-800 p-3 rounded-full relative">
                     <Heart className={`w-6 h-6 ${user.hearts > 0 ? 'text-red-500 fill-red-500' : 'text-gray-600'}`} />
@@ -281,9 +297,33 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <button onClick={handleGenerate} disabled={loading}
-                className={`w-full mt-6 font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition shadow-lg ${loading ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-linear-to-r from-neon-blue to-blue-600 text-black hover:shadow-[0_0_20px_rgba(0,243,255,0.4)] hover:scale-[1.02] active:scale-[0.98]'}`}>
-                {loading ? <><Loader className="animate-spin" /> Generating...</> : 'Generate Exam'}
+              {/* UPDATED: Loading Button with Progress Bar */}
+              <button 
+                onClick={handleGenerate} 
+                disabled={loading}
+                className={`w-full mt-6 font-bold py-4 rounded-xl flex flex-col items-center justify-center transition shadow-lg ${
+                  loading 
+                    ? 'bg-gray-800 text-gray-400 cursor-not-allowed border border-gray-700' 
+                    : 'bg-linear-to-r from-neon-blue to-blue-600 text-black hover:shadow-[0_0_20px_rgba(0,243,255,0.4)] hover:scale-[1.02] active:scale-[0.98]'
+                }`}
+              >
+                {loading ? (
+                  <>
+                    <div className="flex items-center gap-2 text-sm text-white mb-2">
+                      <Loader className="animate-spin" size={16} />
+                      <span>Generating Batch {progress.current} of {progress.total}</span>
+                    </div>
+                    {/* Progress Bar Container */}
+                    <div className="w-48 h-1.5 bg-gray-900 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-neon-blue transition-all duration-500 ease-out" 
+                        style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  'Generate Exam'
+                )}
               </button>
             </div>
           </div>
@@ -330,10 +370,9 @@ export default function Dashboard() {
               ) : (
                 quizzes.map((quiz) => (
                   <div key={quiz.id} 
-                    onClick={() => handleQuizClick(quiz.id)} // FIX: Use handleQuizClick here
+                    onClick={() => handleQuizClick(quiz.id)} 
                     className="group bg-dark-surface p-5 rounded-2xl border border-gray-800 hover:border-neon-purple transition-all cursor-pointer flex justify-between items-center shadow-md hover:shadow-lg relative overflow-hidden">
                     
-                    {/* Hover Glow Effect */}
                     <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-shimmer pointer-events-none"></div>
 
                     <div className="flex-1 mr-4 z-10">
