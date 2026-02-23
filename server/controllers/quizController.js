@@ -41,7 +41,7 @@ export const deleteQuiz = async (req, res) => {
     }
 };
 
-// Unified generateQuiz with Chunking, Batching, and Socket.io Progress
+// Unified generateQuiz with Strict Deduplication and Retries
 export const generateQuiz = async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No PDF uploaded" });
   
@@ -57,40 +57,43 @@ export const generateQuiz = async (req, res) => {
       throw new Error("Not enough text extracted.");
     }
 
-    // 1. Define a maximum safe limit for the entire text (e.g., 60k chars)
     const maxTextLength = 60000;
     const safeText = text.length > maxTextLength ? text.substring(0, maxTextLength) : text;
 
     let allQuestions = [];
     const numBatches = Math.ceil(totalQuestionsNeeded / BATCH_SIZE);
-
-    // 2. Calculate how large each text chunk should be based on the number of batches
     const chunkSize = Math.ceil(safeText.length / numBatches);
-
     const io = req.app.get('socketio');
 
-    console.log(`2. Starting Batched Generation (${numBatches} total batches)...`);
+    // Tracking for the while loop
+    let attempts = 0;
+    const maxAttempts = numBatches + 3; // Allow up to 3 extra API calls to replace duplicates
+    let currentChunkIndex = 0;
 
-    for (let i = 0; i < numBatches; i++) {
+    console.log(`2. Starting Batched Generation (Target: ${totalQuestionsNeeded} Qs)...`);
+
+    // Use a while loop to ensure we keep going until we have enough UNIQUE questions
+    while (allQuestions.length < totalQuestionsNeeded && attempts < maxAttempts) {
+      attempts++;
+      
       if (io && req.user && req.user.id) {
          io.emit(`generateProgress_${req.user.id}`, { 
-           current: i + 1, 
-           total: numBatches 
+           current: attempts, 
+           total: Math.max(numBatches, attempts) 
          });
       }
 
       const remainingNeeded = totalQuestionsNeeded - allQuestions.length;
       const currentBatchCount = Math.min(BATCH_SIZE, remainingNeeded);
 
-      // 3. Extract the specific chunk of text for THIS batch
-      const startIdx = i * chunkSize;
-      // Add a 500-character overlap to the endIdx so we don't cut off mid-sentence
-      const endIdx = Math.min((i + 1) * chunkSize + 500, safeText.length);
+      // Cycle through chunks (if we need extra attempts, we loop back to earlier text)
+      const chunkToUse = currentChunkIndex % numBatches;
+      const startIdx = chunkToUse * chunkSize;
+      const endIdx = Math.min((chunkToUse + 1) * chunkSize + 500, safeText.length);
       const batchText = safeText.substring(startIdx, endIdx);
 
       const existingQuestionTexts = allQuestions.map(q => q.question).join("\n- ");
 
-      // Note: We now feed it `batchText` instead of the whole `truncatedText`
       const prompt = `
         Create a strictly valid JSON exam based on the text segment below.
         
@@ -98,11 +101,10 @@ export const generateQuiz = async (req, res) => {
         - Course Type: ${course}
         - Difficulty: ${difficulty}
         - Description/Focus: ${description || "General coverage"}
-        - Count: ${currentBatchCount} questions.
-        - Document Progress: You are reading segment ${i + 1} out of ${numBatches}.
+        - Count: Generate exactly ${currentBatchCount} unique questions.
 
-        ${allQuestions.length > 0 ? `[CRITICAL] DO NOT repeat the following questions:
-        - ${existingQuestionTexts}` : ""}
+        [CRITICAL] YOU MUST NOT GENERATE ANY QUESTION THAT IS SIMILAR TO THESE:
+        - ${existingQuestionTexts}
         
         RULES:
         1. Return ONLY a JSON array. No Markdown blocks.
@@ -121,16 +123,38 @@ export const generateQuiz = async (req, res) => {
           }
         ]
 
-        TEXT DATA (SEGMENT ${i + 1}):
+        TEXT DATA:
         ${batchText}
       `;
 
-      console.log(`>> Generating Batch ${i + 1}/${numBatches}... (Text length: ${batchText.length})`);
+      console.log(`>> Generating Batch ${attempts}... (Need ${remainingNeeded} more valid Qs)`);
       const batchQuestions = await generateQuizQuestions(prompt);
       
       if (Array.isArray(batchQuestions)) {
-        allQuestions = [...allQuestions, ...batchQuestions];
+        // STRICT JAVASCRIPT DEDUPLICATION
+        const uniqueBatch = [];
+        const existingSet = new Set(allQuestions.map(q => q.question.toLowerCase().trim()));
+
+        for (const q of batchQuestions) {
+            // Normalize string to catch exact matches despite capitalization/spaces
+            const normalizedQ = q.question.toLowerCase().trim();
+            
+            // Only add if we haven't seen this exact question before AND we still need more
+            if (!existingSet.has(normalizedQ) && (allQuestions.length + uniqueBatch.length) < totalQuestionsNeeded) {
+                existingSet.add(normalizedQ);
+                uniqueBatch.push(q);
+            } else if (existingSet.has(normalizedQ)) {
+                console.log(`>> [FILTERED DUPLICATE]: ${q.question}`);
+            }
+        }
+
+        allQuestions = [...allQuestions, ...uniqueBatch];
+        currentChunkIndex++; // Move to next chunk of text
       }
+    }
+
+    if (allQuestions.length === 0) {
+      throw new Error("AI failed to generate any valid unique questions.");
     }
 
     // Final Validation and DB Save
