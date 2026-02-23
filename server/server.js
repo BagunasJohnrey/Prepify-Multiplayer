@@ -40,6 +40,8 @@ const io = new SocketIOServer(httpServer, {
     path: '/socket.io/' 
 });
 
+app.set('socketio', io);
+
 // Explicit Socket.IO Polling/Health Check Route
 app.get('/socket.io/', (req, res) => {
     res.status(200).send('Socket.IO health check successful.');
