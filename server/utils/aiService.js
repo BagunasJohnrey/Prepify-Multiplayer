@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+// UPDATED: Using verified active free model IDs to avoid 404 errors
 const FREE_MODELS = [
   "google/gemini-2.0-flash-lite-preview-02-05:free",
   "google/gemma-3-27b-it:free",
@@ -10,102 +11,63 @@ const FREE_MODELS = [
   "qwen/qwen-2-7b-instruct:free"
 ];
 
-// Determine the live domain of the backend service from Render's standard environment variables
 const RENDER_EXTERNAL_HOSTNAME = process.env.RENDER_EXTERNAL_HOSTNAME;
 const REFERER_URL = RENDER_EXTERNAL_HOSTNAME ? `https://${RENDER_EXTERNAL_HOSTNAME}` : "http://localhost:3000";
 
-export const generateQuiz = async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "No PDF uploaded" });
-  
-  const { course, customTitle, numQuestions, difficulty, description } = req.body;
-  const totalQuestionsNeeded = parseInt(numQuestions) || 10;
-  // Define batch size (10 is stable for free models)
-  const BATCH_SIZE = 10; 
+export const generateQuizQuestions = async (prompt) => {
+    let questions = null;
+    let lastError = null;
 
-  try {
-    console.log("1. Parsing PDF...");
-    const text = await parsePDFBuffer(req.file.buffer);
-    
-    if (text.length < 50) {
-      throw new Error("Not enough text extracted. The PDF might be scanned images.");
+    for (const model of FREE_MODELS) {
+        try {
+            console.log(`>> Trying model: ${model}...`);
+            
+            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": REFERER_URL, 
+                    "X-Title": "Prepify App - Render Backend"
+                },
+                body: JSON.stringify({
+                    model: model,
+                    messages: [{ role: "user", content: prompt }],
+                    // ADDED: Limit output to prevent 402 "Insufficient Credits" errors
+                    max_tokens: 1500 
+                })
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Status ${response.status} - ${errText}`);
+            }
+
+            const data = await response.json();
+            
+            if (!data.choices || !data.choices[0]) {
+               throw new Error("Invalid structure from API");
+            }
+
+            let rawText = data.choices[0].message.content;
+            
+            // Clean Markdown blocks
+            rawText = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+            const jsonStartIndex = rawText.indexOf('[');
+            const jsonEndIndex = rawText.lastIndexOf(']');
+            if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
+                rawText = rawText.substring(jsonStartIndex, jsonEndIndex + 1);
+            }
+
+            questions = JSON.parse(rawText);
+            console.log(`>> Success with ${model}!`);
+            return questions; // Return immediately on success
+
+        } catch (err) {
+            console.warn(`>> Model ${model} failed: ${err.message}`);
+            lastError = err;
+        }
     }
 
-    // Keep truncation reasonable to ensure it fits in context windows
-    const truncatedText = text.length > 15000 ? text.substring(0, 15000) : text;
-
-    let allQuestions = [];
-    const numBatches = Math.ceil(totalQuestionsNeeded / BATCH_SIZE);
-
-    console.log(`2. Starting Batched Generation (${numBatches} batches)...`);
-
-    for (let i = 0; i < numBatches; i++) {
-      const remainingNeeded = totalQuestionsNeeded - allQuestions.length;
-      const currentBatchCount = Math.min(BATCH_SIZE, remainingNeeded);
-
-      const prompt = `
-        Create a strictly valid JSON exam based on the text below.
-        
-        CONTEXT:
-        - Course Type: ${course}
-        - Difficulty: ${difficulty}
-        - Description/Focus: ${description || "General coverage"}
-        - Count: ${currentBatchCount} questions.
-        - Batch Info: This is batch ${i + 1} of ${numBatches}. 
-        - [IMPORTANT] Ensure these questions are unique and do not overlap with previous topics if possible.
-        
-        RULES:
-        1. Return ONLY a JSON array. No Markdown blocks, no intro/outro.
-        2. Multiple Choice: Exactly 4 options.
-        3. Do not use "All of the above" or "None of the above".
-        4. The "answer" field must MATCH exactly one of the strings in "options".
-        5. Provide a short "explanation".
-
-        JSON FORMAT:
-        [
-          {
-            "question": "Question text here?",
-            "options": ["A", "B", "C", "D"], 
-            "answer": "A", 
-            "explanation": "..."
-          }
-        ]
-
-        TEXT DATA:
-        ${truncatedText}
-      `;
-
-      console.log(`>> Generating Batch ${i + 1}/${numBatches} (${currentBatchCount} questions)...`);
-      const batchQuestions = await generateQuizQuestions(prompt);
-      
-      if (Array.isArray(batchQuestions)) {
-        allQuestions = [...allQuestions, ...batchQuestions];
-      }
-    }
-
-    // Validate the final combined array
-    const validation = QuizSchema.safeParse(allQuestions);
-    if (!validation.success) {
-        console.error("Batch Validation Failed:", JSON.stringify(validation.error.format(), null, 2));
-        throw new Error("AI generated an invalid format in one of the batches.");
-    }
-
-    console.log("3. Saving to Database...");
-    const title = customTitle || `Exam - ${new Date().toLocaleDateString()}`;
-    
-    const newQuiz = await Quiz.create(
-        title, 
-        course, 
-        difficulty, 
-        description, 
-        JSON.stringify(allQuestions), 
-        allQuestions.length
-    );
-
-    console.log("4. Success!");
-    res.json(newQuiz);
-
-  } catch (err) {
-    console.error("GENERATION ERROR:", err);
-    res.status(500).json({ error: "Failed to generate quiz. " + err.message });
-  }
+    throw new Error("All AI models failed. Last error: " + (lastError?.message || "Unknown"));
 };
