@@ -41,7 +41,7 @@ export const deleteQuiz = async (req, res) => {
     }
 };
 
-// Unified generateQuiz with Batching Support for 50 questions
+// Unified generateQuiz with Batching Support and Socket.io Progress
 export const generateQuiz = async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No PDF uploaded" });
   
@@ -62,13 +62,23 @@ export const generateQuiz = async (req, res) => {
     let allQuestions = [];
     const numBatches = Math.ceil(totalQuestionsNeeded / BATCH_SIZE);
 
+    // Get the socketio instance attached to the app in server.js
+    const io = req.app.get('socketio');
+
     console.log(`2. Starting Batched Generation (${numBatches} total batches)...`);
 
     for (let i = 0; i < numBatches; i++) {
+      // ADDED: Emit progress event to the specific user over Socket.io
+      if (io && req.user && req.user.id) {
+         io.emit(`generateProgress_${req.user.id}`, { 
+           current: i + 1, 
+           total: numBatches 
+         });
+      }
+
       const remainingNeeded = totalQuestionsNeeded - allQuestions.length;
       const currentBatchCount = Math.min(BATCH_SIZE, remainingNeeded);
 
-      // Extract only the question text from previous batches to keep prompt size small
       const existingQuestionTexts = allQuestions.map(q => q.question).join("\n- ");
 
       const prompt = `
