@@ -13,7 +13,16 @@ const QuizSchema = z.array(z.object({
 
 export const getQuizzes = async (req, res) => {
   try {
-    const quizzes = await Quiz.getAll(req.query.course);
+    const { course, page, limit } = req.query;
+
+    if (page || limit) {
+      const pageNum = Math.max(1, parseInt(page) || 1);
+      const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 12));
+      const result = await Quiz.getAllPaginated(course, pageNum, limitNum);
+      return res.json(result);
+    }
+
+    const quizzes = await Quiz.getAll(course);
     res.json(quizzes);
   } catch (err) {
     console.error("GET Quizzes Error:", err);
