@@ -1,73 +1,94 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-// UPDATED: Using verified active free model IDs to avoid 404 errors
-const FREE_MODELS = [
-  "google/gemini-2.0-flash-lite-preview-02-05:free",
-  "google/gemma-3-27b-it:free",
-  "arcee-ai/trinity-large-preview:free",
-  "deepseek/deepseek-r1-distill-qwen-32b:free",
-  "stepfun/step-3.5-flash:free",
-  "qwen/qwen-2-7b-instruct:free"
-];
+// Direct providers: Google Gemini and Groq (OpenAI-compatible).
+// They fall back to each other; the primary alternates each call to balance load.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
-const RENDER_EXTERNAL_HOSTNAME = process.env.RENDER_EXTERNAL_HOSTNAME;
-const REFERER_URL = RENDER_EXTERNAL_HOSTNAME ? `https://${RENDER_EXTERNAL_HOSTNAME}` : "http://localhost:3000";
+let toggle = 0;
+
+const extractJson = (rawText) => {
+  let text = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+  const start = text.indexOf("[");
+  const end = text.lastIndexOf("]");
+  if (start !== -1 && end !== -1) {
+    text = text.substring(start, end + 1);
+  }
+  return JSON.parse(text);
+};
+
+const callGemini = async (prompt) => {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("Missing GEMINI_API_KEY");
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: 1500 }
+    })
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Gemini ${res.status}: ${errText}`);
+  }
+
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("Gemini returned no content");
+  return extractJson(text);
+};
+
+const callGroq = async (prompt) => {
+  const key = process.env.GROQ_API_KEY;
+  if (!key) throw new Error("Missing GROQ_API_KEY");
+
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${key}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 1500
+    })
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Groq ${res.status}: ${errText}`);
+  }
+
+  const data = await res.json();
+  const text = data?.choices?.[0]?.message?.content;
+  if (!text) throw new Error("Groq returned no content");
+  return extractJson(text);
+};
 
 export const generateQuizQuestions = async (prompt) => {
-    let questions = null;
-    let lastError = null;
+  // Alternate the primary provider each call so load is shared and neither is
+  // always the fallback. Falls back to the other on any failure.
+  const order = (++toggle % 2 === 0) ? [callGemini, callGroq] : [callGroq, callGemini];
+  let lastError;
 
-    for (const model of FREE_MODELS) {
-        try {
-            console.log(`>> Trying model: ${model}...`);
-            
-            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": REFERER_URL, 
-                    "X-Title": "Prepify App - Render Backend"
-                },
-                body: JSON.stringify({
-                    model: model,
-                    messages: [{ role: "user", content: prompt }],
-                    // ADDED: Limit output to prevent 402 "Insufficient Credits" errors
-                    max_tokens: 1500 
-                })
-            });
-
-            if (!response.ok) {
-                const errText = await response.text();
-                throw new Error(`Status ${response.status} - ${errText}`);
-            }
-
-            const data = await response.json();
-            
-            if (!data.choices || !data.choices[0]) {
-               throw new Error("Invalid structure from API");
-            }
-
-            let rawText = data.choices[0].message.content;
-            
-            // Clean Markdown blocks
-            rawText = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
-            const jsonStartIndex = rawText.indexOf('[');
-            const jsonEndIndex = rawText.lastIndexOf(']');
-            if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
-                rawText = rawText.substring(jsonStartIndex, jsonEndIndex + 1);
-            }
-
-            questions = JSON.parse(rawText);
-            console.log(`>> Success with ${model}!`);
-            return questions; // Return immediately on success
-
-        } catch (err) {
-            console.warn(`>> Model ${model} failed: ${err.message}`);
-            lastError = err;
-        }
+  for (const provider of order) {
+    try {
+      const name = provider === callGemini ? "Gemini" : "Groq";
+      console.log(`>> Trying ${name}...`);
+      const questions = await provider(prompt);
+      console.log(`>> Success with ${name}!`);
+      return questions;
+    } catch (err) {
+      console.warn(`>> ${provider === callGemini ? "Gemini" : "Groq"} failed: ${err.message}`);
+      lastError = err;
     }
+  }
 
-    throw new Error("All AI models failed. Last error: " + (lastError?.message || "Unknown"));
+  throw new Error("All AI providers failed. Last error: " + (lastError?.message || "Unknown"));
 };

@@ -17,11 +17,11 @@ const safeUser = (u) => ({
   role: u.role
 });
 
-const setAuthCookie = (res, token) => {
+const setAuthCookie = (res, token, secure) => {
   res.cookie("token", token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure,
     path: "/",
     maxAge: TOKEN_MAX_AGE_MS
   });
@@ -54,7 +54,7 @@ export const login = async (req, res) => {
     }
 
     const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
-    setAuthCookie(res, token);
+    setAuthCookie(res, token, req.secure);
 
     res.json({ 
         token, 
@@ -119,7 +119,7 @@ export const logout = (req, res) => {
     res.clearCookie("token", {
         httpOnly: true,
         sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
+        secure: req.secure,
         path: "/"
     });
     res.json({ success: true });

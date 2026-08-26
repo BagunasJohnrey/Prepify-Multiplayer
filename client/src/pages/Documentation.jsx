@@ -83,7 +83,7 @@ export default function Documentation() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <StatusItem label="API Gateway" status="Operational" />
               <StatusItem label="Database (PostgreSQL)" status="Operational" />
-              <StatusItem label="AI Engine (OpenRouter)" status="Operational" />
+              <StatusItem label="AI Engine (Gemini & Groq)" status="Operational" />
             </div>
 
             <div className="mt-6 p-4 bg-black/20 rounded-xl border border-gray-800/50 flex justify-between items-center text-xs font-mono text-gray-400">
@@ -117,7 +117,7 @@ export default function Documentation() {
                 <div>
                   <h3 className="text-lg font-bold text-white mb-2">AI Quiz Generation</h3>
                   <p className="text-gray-400 text-sm leading-relaxed">
-                    We leverage <strong>OpenRouter</strong> to access advanced LLMs like <em>Llama 3</em> and <em>Gemini</em>. When a PDF is uploaded, it is parsed server-side using <code>pdf2json</code>. The extracted text is chunked and sent to the AI with a structured prompt to generate a strictly formatted JSON quiz array.
+                    We leverage <strong>Google Gemini</strong> and <strong>Groq</strong> to access advanced LLMs like <em>Gemini Flash</em> and <em>Llama 3.3</em>, with automatic fallback between the two. When a PDF is uploaded, it is parsed server-side using <code>pdf2json</code>. The extracted text is chunked and sent to the AI with a structured prompt to generate a strictly formatted JSON quiz array.
                   </p>
                 </div>
               </div>

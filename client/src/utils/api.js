@@ -25,7 +25,17 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('user');
-      window.location.href = '/'; 
+      // Only redirect when on a protected route. On public pages a 401 just means
+      // "not logged in" and must NOT trigger a redirect loop (which also floods the
+      // rate limiter and opens endless socket connections).
+      const path = window.location.pathname;
+      const protectedPrefixes = ['/dashboard', '/quiz', '/result'];
+      const isProtected = protectedPrefixes.some(
+        (p) => path === p || path.startsWith(p + '/')
+      );
+      if (isProtected) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

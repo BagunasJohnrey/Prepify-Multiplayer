@@ -11,7 +11,7 @@
 
 ## ✨ Key Features
 
-* **📄 AI Quiz Generation**: Upload any PDF (up to 5MB), and our AI (powered by OpenRouter/Gemini/Llama) parses the text to create a structured JSON exam.
+* **📄 AI Quiz Generation**: Upload any PDF (up to 5MB), and our AI (powered by Google Gemini & Groq) parses the text to create a structured JSON exam.
 * **Gamified Learning**:
     * **Heart System**: Users start with 3 hearts. Incorrect answers cost a heart.
     * **Regeneration**: Hearts regenerate automatically over time (2 minutes per heart).
@@ -33,7 +33,7 @@
 * **Runtime**: Node.js
 * **Framework**: Express.js
 * **Database**: PostgreSQL (`pg`)
-* **AI Integration**: OpenRouter API (Accessing models like Gemini Flash, Llama 3, Deepseek)
+* **AI Integration**: Google Gemini & Groq APIs (Gemini Flash and Llama 3.3, with mutual fallback)
 * **File Handling**: Multer (Memory Storage) & PDF2JSON
 * **Validation**: Zod
 
@@ -100,7 +100,8 @@ PORT=3000
 NODE_ENV=production
 DATABASE_URL=postgresql://user:password@localhost:5432/your_db_name
 JWT_SECRET=your_secure_jwt_secret
-OPENROUTER_API_KEY=your_openrouter_api_key
+GEMINI_API_KEY=your_gemini_api_key
+GROQ_API_KEY=your_groq_api_key
 CLIENT_URL=https://your-frontend-domain.com
 RENDER_EXTERNAL_HOSTNAME=your-app.onrender.com
 # Set to "false" only for local dev with a self-signed DB cert
@@ -179,14 +180,12 @@ prepify/
 
 ## 🤖 AI Model Configuration
 
-The application uses **OpenRouter** to fetch questions. By default, it attempts to use free models in the following order (defined in `server/utils/aiService.js`):
+Quiz generation calls **Google Gemini** and **Groq** directly. Each generation attempt alternates the primary provider and **falls back to the other** on any failure, so the two back each other up.
 
-1.  Google Gemini 2.0 Flash
-2.  Meta Llama 3.3
-3.  Deepseek R1
-4.  OpenAI GPT-OSS
+- **Gemini**: `gemini-2.0-flash` via `GEMINI_API_KEY` (override with `GEMINI_MODEL`).
+- **Groq**: `llama-3.3-70b-versatile` via `GROQ_API_KEY` (OpenAI-compatible; override with `GROQ_MODEL`).
 
-Ensure your `OPENROUTER_API_KEY` has access to these models.
+Set both keys in your `.env` (see `.env.example`). If only one key is present, the app uses it and simply has no fallback.
 
 ## 🚀 Deployment
 
@@ -202,10 +201,9 @@ npm run build
 
 Set the environment variables listed above. `CLIENT_URL` / `RENDER_EXTERNAL_HOSTNAME` are used for CORS and the self-ping.
 
-After the database exists, run the migration and (optionally) seed an admin as part of your deploy/build steps:
+The `xp` migration runs automatically on `npm start` (it is idempotent, so it's safe to run on every deploy). If you prefer to run it manually, use `npm run migrate`. Seed an admin once:
 
 ```bash
-npm run migrate
 ADMIN_USERNAME=admin ADMIN_PASSWORD=change_me npm run seed
 ```
 
