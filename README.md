@@ -182,10 +182,10 @@ prepify/
 
 Quiz generation calls **Google Gemini** and **Groq** directly. Each generation attempt alternates the primary provider and **falls back to the other** on any failure, so the two back each other up.
 
-- **Gemini**: `gemini-2.0-flash` via `GEMINI_API_KEY` (override with `GEMINI_MODEL`).
-- **Groq**: `llama-3.3-70b-versatile` via `GROQ_API_KEY` (OpenAI-compatible; override with `GROQ_MODEL`).
+- **Gemini**: `gemini-2.5-flash` (fallback `gemini-2.5-flash-lite`) via `GEMINI_API_KEY`.
+- **Groq**: `llama-4-scout-17b-16e-instruct` (fallbacks `llama-3.3-70b-versatile`, `gemma-2-9b-it`) via `GROQ_API_KEY`.
 
-Set both keys in your `.env` (see `.env.example`). If only one key is present, the app uses it and simply has no fallback.
+Set both keys in your `.env` (see `.env.example`). Each provider tries its candidate model list in order and falls back to the other provider on failure. If only one key is present, the app uses it with no fallback. Override the lists with `GEMINI_MODELS` / `GROQ_MODELS` (comma-separated) if your account lacks the defaults.
 
 ## 🚀 Deployment
 
