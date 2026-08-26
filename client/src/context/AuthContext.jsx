@@ -37,22 +37,21 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      refreshUser();
-    } else {
-      setLoading(false);
-    }
+    // The httpOnly cookie is the source of truth; always validate it on load.
+    refreshUser();
   }, []);
 
-  const login = (token, userData) => {
-    localStorage.setItem('token', token);
+  const login = (userData) => {
     localStorage.setItem('user', JSON.stringify(userData));
     setUser(userData);
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch {
+      // ignore network errors; clear local state regardless
+    }
     localStorage.removeItem('user');
     setUser(null);
     window.location.href = '/';

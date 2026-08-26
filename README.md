@@ -11,11 +11,11 @@
 
 ## ✨ Key Features
 
-* **📄 AI Quiz Generation**: Upload any PDF (up to 5MB), and our AI (powered by OpenRouter/Gemini/Llama) parses the text to create a structured JSON exam.
-* **ww Gamified Learning**:
+* **📄 AI Quiz Generation**: Upload any PDF (up to 5MB), and our AI (powered by Google Gemini & Groq) parses the text to create a structured JSON exam.
+* **Gamified Learning**:
     * **Heart System**: Users start with 3 hearts. Incorrect answers cost a heart.
     * **Regeneration**: Hearts regenerate automatically over time (2 minutes per heart).
-* **Pdf Adaptive Configuration**: Choose your subject type (Major, Minor, GED), difficulty level, and number of questions.
+* **PDF Adaptive Configuration**: Choose your subject type (Major, Minor, GED), difficulty level, and number of questions.
 * **Interactive Dashboard**: View recent exams, track progress, and manage your quiz library.
 * **UI Modern Aesthetics**: A fully responsive Cyberpunk/Neon-Dark interface built with Tailwind CSS v4.
 * **Secure Authentication**: JWT-based authentication with Bcrypt password hashing.
@@ -33,7 +33,7 @@
 * **Runtime**: Node.js
 * **Framework**: Express.js
 * **Database**: PostgreSQL (`pg`)
-* **AI Integration**: OpenRouter API (Accessing models like Gemini Flash, Llama 3, Deepseek)
+* **AI Integration**: Google Gemini & Groq APIs (Gemini Flash and Llama 3.3, with mutual fallback)
 * **File Handling**: Multer (Memory Storage) & PDF2JSON
 * **Validation**: Zod
 
@@ -60,6 +60,7 @@ CREATE TABLE users (
     password_hash VARCHAR(255) NOT NULL,
     role VARCHAR(50) DEFAULT 'user',
     hearts INTEGER DEFAULT 3,
+    xp INTEGER DEFAULT 0,
     last_heart_update TIMESTAMP DEFAULT NOW()
 );
 
@@ -74,13 +75,14 @@ CREATE TABLE quizzes (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE results (
-    id SERIAL PRIMARY KEY,
-    quiz_id INTEGER REFERENCES quizzes(id),
-    user_id INTEGER REFERENCES users(id),
-    score INTEGER,
-    created_at TIMESTAMP DEFAULT NOW()
-);
+-- Optional: uncomment if you implement result persistence in the future.
+-- CREATE TABLE results (
+--     id SERIAL PRIMARY KEY,
+--     quiz_id INTEGER REFERENCES quizzes(id),
+--     user_id INTEGER REFERENCES users(id),
+--     score INTEGER,
+--     created_at TIMESTAMP DEFAULT NOW()
+-- );
 ```
 
 ### 3\. Backend Setup
@@ -91,13 +93,22 @@ Navigate to the root directory, install dependencies, and configure the environm
 npm install
 ```
 
-Create a `.env` fileQm in the root directory:
+Create a `.env` file in the root directory:
 
 ```env
 PORT=3000
+NODE_ENV=production
 DATABASE_URL=postgresql://user:password@localhost:5432/your_db_name
 JWT_SECRET=your_secure_jwt_secret
-OPENROUTER_API_KEY=your_openrouter_api_key
+GEMINI_API_KEY=your_gemini_api_key
+GROQ_API_KEY=your_groq_api_key
+CLIENT_URL=https://your-frontend-domain.com
+RENDER_EXTERNAL_HOSTNAME=your-app.onrender.com
+# Set to "false" only for local dev with a self-signed DB cert
+DB_SSL_REJECT_UNAUTHORIZED=true
+# Optional: used by `npm run seed` to create/promote an admin
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=change_me
 ```
 
 Start the server:
@@ -105,6 +116,22 @@ Start the server:
 ```bash
 npm run dev
 ```
+
+### 3b. Database Migrations & Admin
+
+The schema in step 2 is the source of truth, but if you already have a database, apply the required column with the idempotent migration:
+
+```bash
+npm run migrate
+```
+
+The `deleteQuiz` endpoint is admin-only. Nothing creates admins automatically, so seed one (safe to re-run; an existing user is promoted):
+
+```bash
+ADMIN_USERNAME=admin ADMIN_PASSWORD=strongpassword npm run seed
+```
+
+Add `ADMIN_USERNAME` / `ADMIN_PASSWORD` to your `.env` for convenience.
 
 ### 4\. Frontend Setup
 
@@ -153,14 +180,34 @@ prepify/
 
 ## 🤖 AI Model Configuration
 
-The application uses **OpenRouter** to fetch questions. By default, it attempts to use free models in the following order (defined in `server/utils/aiService.js`):
+Quiz generation calls **Google Gemini** and **Groq** directly. Each generation attempt alternates the primary provider and **falls back to the other** on any failure, so the two back each other up.
 
-1.  Google Gemini 2.0 Flash
-2.  Meta Llama 3.3
-3.  Deepseek R1
-4.  OpenAI GPT-OSS
+- **Gemini**: `gemini-2.5-flash` (fallback `gemini-2.5-flash-lite`) via `GEMINI_API_KEY`.
+- **Groq**: `openai/gpt-oss-120b` (fallbacks `qwen/qwen3.8-27b`, `qwen/qwen3.6-27b`, `openai/gpt-oss-20b`, `groq/compound-mini`) via `GROQ_API_KEY`.
 
-Ensure your `OPENROUTER_API_KEY` has access to these models.
+Set both keys in your `.env` (see `.env.example`). Each provider tries its candidate model list in order and falls back to the other provider on failure. If only one key is present, the app uses it with no fallback. Override the lists with `GEMINI_MODELS` / `GROQ_MODELS` (comma-separated) if your account lacks the defaults.
+
+## 🚀 Deployment
+
+This app uses **Socket.IO** with in-memory game state, so it requires a **stateful, long-running host**. Deploy the `server` (which also serves the built `client/dist`) on **Render** (or Railway/Fly). The built-in self-ping keeps the free tier awake.
+
+> ⚠️ Do **not** deploy the realtime backend to Vercel — Vercel's serverless functions do not support persistent WebSocket connections or shared in-memory room state, so multiplayer and `/api/generate` will break. `vercel.json` is kept only if you choose to host the static client separately.
+
+Build the client before deploying:
+
+```bash
+npm run build
+```
+
+Set the environment variables listed above. `CLIENT_URL` / `RENDER_EXTERNAL_HOSTNAME` are used for CORS and the self-ping.
+
+The `xp` migration runs automatically on `npm start` (it is idempotent, so it's safe to run on every deploy). If you prefer to run it manually, use `npm run migrate`. Seed an admin once:
+
+```bash
+ADMIN_USERNAME=admin ADMIN_PASSWORD=change_me npm run seed
+```
+
+> Note: `vercel.json` was removed — this app is intended for a stateful host (Render), not Vercel.
 
 ## 🤝 Contributing
 
@@ -168,7 +215,7 @@ Contributions are welcome\! Please fork the repository and submit a pull request
 
 ## 📝 License
 
-This project is open-source and available under the [MIT License](https://www.google.com/search?q=LICENSE).
+This project is open-source and available under the [MIT License](LICENSE).
 
 -----
 

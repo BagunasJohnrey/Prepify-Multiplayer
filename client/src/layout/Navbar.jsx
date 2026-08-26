@@ -28,7 +28,7 @@ export default function Navbar({ onOpenLogout }) {
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between relative">
         
         {/* Logo */}
-        <Link to={user ? "/dashboard" : "/"} className="text-2xl font-black tracking-tight text-white flex items-center">
+        <Link to={user ? "/dashboard" : "/"} className="logo-font text-2xl font-black tracking-tight text-white flex items-center">
           <span className="text-neon-blue">PREP</span>IFY
         </Link>
 
@@ -55,9 +55,9 @@ export default function Navbar({ onOpenLogout }) {
         <div className="hidden md:flex items-center gap-4">
           {user ? (
             <div className="flex items-center gap-4">
-              <span className="text-gray-400 text-sm flex items-center gap-2">
+              <Link to="/profile" className="text-gray-400 text-sm flex items-center gap-2 hover:text-white transition">
                 <User size={16} /> {user.username}
-              </span>
+              </Link>
               <button 
                 onClick={handleLogout} 
                 className="bg-gray-800 hover:bg-gray-700 text-white p-2 rounded-lg transition border border-gray-700"
@@ -93,6 +93,7 @@ export default function Navbar({ onOpenLogout }) {
           <Link to="/documentation" className="text-white py-2" onClick={() => setIsOpen(false)}>Documentation</Link>
           
           {user && <Link to="/dashboard" className="text-white py-2" onClick={() => setIsOpen(false)}>Dashboard</Link>}
+          {user && <Link to="/profile" className="text-white py-2" onClick={() => setIsOpen(false)}>Profile</Link>}
           {user && <Link to="/multiplayer" className="text-white py-2 flex items-center gap-2" onClick={() => setIsOpen(false)}>
               <Users size={18} /> Play with Friends
           </Link>}

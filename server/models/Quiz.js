@@ -15,6 +15,32 @@ export default {
     return rows;
   },
 
+  async getAllPaginated(course, page = 1, limit = 12) {
+    let baseQuery = "FROM quizzes";
+    let params = [];
+    let paramIndex = 1;
+
+    if (course && course !== "null" && course !== "" && course !== "All") {
+      baseQuery += ` WHERE course = $${paramIndex}`;
+      params.push(course);
+      paramIndex++;
+    }
+
+    const countResult = await pool.query(`SELECT COUNT(*) ${baseQuery}`, params);
+    const total = parseInt(countResult.rows[0].count);
+
+    const dataQuery = `SELECT id, title, course, difficulty, description, items_count, created_at ${baseQuery} ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    const offset = (page - 1) * limit;
+    const { rows } = await pool.query(dataQuery, [...params, limit, offset]);
+
+    return {
+      quizzes: rows,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    };
+  },
+
   async findById(id) {
     const { rows } = await pool.query("SELECT * FROM quizzes WHERE id = $1", [id]);
     return rows[0];

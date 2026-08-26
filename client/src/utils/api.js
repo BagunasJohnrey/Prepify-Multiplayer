@@ -16,24 +16,26 @@ if (!baseUrl.endsWith('/api')) {
 }
 
 const api = axios.create({
-  baseURL: baseUrl, 
-});
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
+  baseURL: baseUrl,
+  withCredentials: true,
 });
 
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/'; 
+      // Only redirect when on a protected route. On public pages a 401 just means
+      // "not logged in" and must NOT trigger a redirect loop (which also floods the
+      // rate limiter and opens endless socket connections).
+      const path = window.location.pathname;
+      const protectedPrefixes = ['/dashboard', '/quiz', '/result'];
+      const isProtected = protectedPrefixes.some(
+        (p) => path === p || path.startsWith(p + '/')
+      );
+      if (isProtected) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

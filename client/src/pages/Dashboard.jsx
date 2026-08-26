@@ -5,7 +5,8 @@ import toast from 'react-hot-toast';
 import api from '../utils/api'; 
 import { useAuth } from '../context/AuthContext'; 
 import StoreModal from '../components/StoreModal';
-import socket from '../utils/socket'; // <-- ADDED: Import socket instance
+import Pagination from '../components/ui/Pagination';
+import socket from '../utils/socket';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -23,6 +24,8 @@ export default function Dashboard() {
   const [filter, setFilter] = useState('All');
   const [quizzes, setQuizzes] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   
   // NEW: State for tracking generation progress
   const [progress, setProgress] = useState({ current: 0, total: 0 });
@@ -34,16 +37,27 @@ export default function Dashboard() {
   // Fetch Quizzes
   const fetchQuizzes = useCallback(async () => {
     try {
-      const { data } = await api.get(`/quizzes?course=${filter}`);
-      setQuizzes(Array.isArray(data) ? data : []);
+      const { data } = await api.get(`/quizzes?course=${filter}&page=${page}&limit=5`);
+      if (data.quizzes) {
+        setQuizzes(data.quizzes);
+        setTotalPages(data.totalPages);
+      } else {
+        setQuizzes(Array.isArray(data) ? data : []);
+        setTotalPages(1);
+      }
     } catch (err) {
       console.error("Failed to fetch quizzes", err);
     }
-  }, [filter]);
+  }, [filter, page]);
 
   useEffect(() => { 
     if (user) fetchQuizzes(); 
   }, [fetchQuizzes, user]);
+
+  // Reset page when filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [filter]);
 
   // NEW LOGIC: Listen for Socket.io progress events
   useEffect(() => {
@@ -304,7 +318,7 @@ export default function Dashboard() {
                 className={`w-full mt-6 font-bold py-4 rounded-xl flex flex-col items-center justify-center transition shadow-lg ${
                   loading 
                     ? 'bg-gray-800 text-gray-400 cursor-not-allowed border border-gray-700' 
-                    : 'bg-linear-to-r from-neon-blue to-blue-600 text-black hover:shadow-[0_0_20px_rgba(0,243,255,0.4)] hover:scale-[1.02] active:scale-[0.98]'
+                    : 'bg-linear-to-r from-neon-blue to-neon-purple text-black hover:shadow-[0_0_20px_rgba(0,243,255,0.4)] hover:scale-[1.02] active:scale-[0.98]'
                 }`}
               >
                 {loading ? (
@@ -368,52 +382,55 @@ export default function Dashboard() {
                   <p className="text-gray-500 text-sm">Upload a PDF document to generate your first exam.</p>
                 </div>
               ) : (
-                quizzes.map((quiz) => (
-                  <div key={quiz.id} 
-                    onClick={() => handleQuizClick(quiz.id)} 
-                    className="group bg-dark-surface p-5 rounded-2xl border border-gray-800 hover:border-neon-purple transition-all cursor-pointer flex justify-between items-center shadow-md hover:shadow-lg relative overflow-hidden">
-                    
-                    <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-shimmer pointer-events-none"></div>
-
-                    <div className="flex-1 mr-4 z-10">
-                      <div className="flex items-center gap-3 mb-1">
-                        <h3 className="font-bold text-lg text-white group-hover:text-neon-purple transition">{quiz.title}</h3>
-                        {quiz.items_count && (
-                          <span className="text-[10px] font-bold uppercase tracking-wider bg-gray-800 text-gray-400 px-2 py-0.5 rounded border border-gray-700">{quiz.items_count} Qs</span>
-                        )}
-                      </div>
+                <>
+                  {quizzes.map((quiz) => (
+                    <div key={quiz.id} 
+                      onClick={() => handleQuizClick(quiz.id)} 
+                      className="group bg-dark-surface p-5 rounded-2xl border border-gray-800 hover:border-neon-purple transition-all cursor-pointer flex justify-between items-center shadow-md hover:shadow-lg relative overflow-hidden">
                       
-                      <p className="text-gray-400 text-sm line-clamp-1 mb-3">{quiz.description || "No description provided."}</p>
+                      <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-shimmer pointer-events-none"></div>
 
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-gray-500 bg-gray-900 px-2 py-1 rounded-md border border-gray-800">
-                          {quiz.course}
-                        </span>
-                        <span className={`text-xs font-bold px-2 py-1 rounded-md border border-gray-800 bg-gray-900 ${
-                          quiz.difficulty === 'Hard' ? 'text-red-400' : 
-                          quiz.difficulty === 'Medium' ? 'text-yellow-400' : 'text-green-400'
-                        }`}>
-                          {quiz.difficulty || 'Medium'}
-                        </span>
+                      <div className="flex-1 mr-4 z-10">
+                        <div className="flex items-center gap-3 mb-1">
+                          <h3 className="font-bold text-lg text-white group-hover:text-neon-purple transition">{quiz.title}</h3>
+                          {quiz.items_count && (
+                            <span className="text-[10px] font-bold uppercase tracking-wider bg-gray-800 text-gray-400 px-2 py-0.5 rounded border border-gray-700">{quiz.items_count} Qs</span>
+                          )}
+                        </div>
+                        
+                        <p className="text-gray-400 text-sm line-clamp-1 mb-3">{quiz.description || "No description provided."}</p>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-gray-500 bg-gray-900 px-2 py-1 rounded-md border border-gray-800">
+                            {quiz.course}
+                          </span>
+                          <span className={`text-xs font-bold px-2 py-1 rounded-md border border-gray-800 bg-gray-900 ${
+                            quiz.difficulty === 'Hard' ? 'text-red-400' : 
+                            quiz.difficulty === 'Medium' ? 'text-yellow-400' : 'text-green-400'
+                          }`}>
+                            {quiz.difficulty || 'Medium'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 z-10">
+                          {user?.role === 'admin' && (
+                              <button 
+                                onClick={(e) => handleDelete(e, quiz.id)} 
+                                className="text-gray-600 hover:text-red-500 p-2 transition hover:bg-red-500/10 rounded-full" 
+                                title="Delete Quiz"
+                              >
+                                  <Trash2 size={18} />
+                              </button>
+                          )}
+                          <button className="bg-white text-black p-3 rounded-full hover:bg-neon-purple hover:text-white transition shadow-lg transform group-hover:scale-110">
+                            <PlayCircle size={24} fill="currentColor" />
+                          </button>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-3 z-10">
-                        {user?.role === 'admin' && (
-                            <button 
-                              onClick={(e) => handleDelete(e, quiz.id)} 
-                              className="text-gray-600 hover:text-red-500 p-2 transition hover:bg-red-500/10 rounded-full" 
-                              title="Delete Quiz"
-                            >
-                                <Trash2 size={18} />
-                            </button>
-                        )}
-                        <button className="bg-white text-black p-3 rounded-full hover:bg-neon-purple hover:text-white transition shadow-lg transform group-hover:scale-110">
-                          <PlayCircle size={24} fill="currentColor" />
-                        </button>
-                    </div>
-                  </div>
-                ))
+                  ))}
+                  <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+                </>
               )}
             </div>
           </div>

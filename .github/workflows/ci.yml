@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    env:
+      JWT_SECRET: ci-test-secret
+      DATABASE_URL: postgresql://u:p@localhost:5432/db
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install server deps
+        run: npm install
+
+      - name: Install client deps and build
+        run: npm run build
+
+      - name: Run tests
+        run: npm test

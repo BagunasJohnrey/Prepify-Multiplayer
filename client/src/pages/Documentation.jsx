@@ -83,7 +83,7 @@ export default function Documentation() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <StatusItem label="API Gateway" status="Operational" />
               <StatusItem label="Database (PostgreSQL)" status="Operational" />
-              <StatusItem label="AI Engine (OpenRouter)" status="Operational" />
+              <StatusItem label="AI Engine (Gemini & Groq)" status="Operational" />
             </div>
 
             <div className="mt-6 p-4 bg-black/20 rounded-xl border border-gray-800/50 flex justify-between items-center text-xs font-mono text-gray-400">
@@ -102,7 +102,7 @@ export default function Documentation() {
               
               {/* Authentication */}
               <div id="auth" className="flex gap-5 scroll-mt-24">
-                <div className="bg-blue-500/10 p-3 rounded-xl h-fit text-blue-400 border border-blue-500/20"><Shield size={24} /></div>
+                <div className="bg-neon-blue/10 p-3 rounded-xl h-fit text-neon-blue border border-neon-blue/20"><Shield size={24} /></div>
                 <div>
                   <h3 className="text-lg font-bold text-white mb-2">Secure Authentication</h3>
                   <p className="text-gray-400 text-sm leading-relaxed">
@@ -113,18 +113,18 @@ export default function Documentation() {
               
               {/* Quiz Generation */}
               <div id="ai" className="flex gap-5 scroll-mt-24">
-                <div className="bg-purple-500/10 p-3 rounded-xl h-fit text-purple-400 border border-purple-500/20"><Brain size={24} /></div>
+                <div className="bg-neon-purple/10 p-3 rounded-xl h-fit text-neon-purple border border-neon-purple/20"><Brain size={24} /></div>
                 <div>
                   <h3 className="text-lg font-bold text-white mb-2">AI Quiz Generation</h3>
                   <p className="text-gray-400 text-sm leading-relaxed">
-                    We leverage <strong>OpenRouter</strong> to access advanced LLMs like <em>Llama 3</em> and <em>Gemini</em>. When a PDF is uploaded, it is parsed server-side using <code>pdf2json</code>. The extracted text is chunked and sent to the AI with a structured prompt to generate a strictly formatted JSON quiz array.
+                    We leverage <strong>Google Gemini</strong> and <strong>Groq</strong> to access advanced LLMs like <em>Gemini Flash</em> and <em>Llama 3.3</em>, with automatic fallback between the two. When a PDF is uploaded, it is parsed server-side using <code>pdf2json</code>. The extracted text is chunked and sent to the AI with a structured prompt to generate a strictly formatted JSON quiz array.
                   </p>
                 </div>
               </div>
 
               {/* Heart System */}
               <div id="db" className="flex gap-5 scroll-mt-24">
-                <div className="bg-green-500/10 p-3 rounded-xl h-fit text-green-400 border border-green-500/20"><Heart size={24} /></div>
+                <div className="bg-neon-green/10 p-3 rounded-xl h-fit text-neon-green border border-neon-green/20"><Heart size={24} /></div>
                 <div>
                   <h3 className="text-lg font-bold text-white mb-2">Heart System & Persistence</h3>
                   <p className="text-gray-400 text-sm leading-relaxed">

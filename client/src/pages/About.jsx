@@ -21,7 +21,7 @@ export default function About() {
 
   return (
     <div className="animate-fade-in">
-      <section className="relative overflow-hidden py-20 px-6">
+      <section className="relative overflow-hidden py-20 px-6 md:px-12">
         <div className="max-w-4xl mx-auto text-center relative z-10">
           <h1 className="text-4xl md:text-6xl font-black mb-6 leading-tight">
             Master Your Exams with <br />
@@ -41,7 +41,7 @@ export default function About() {
       </section>
 
       <section className="bg-dark-surface border-y border-gray-800">
-        <div className="max-w-7xl mx-auto px-6 py-20">
+        <div className="max-w-7xl mx-auto px-6 md:px-12 py-20">
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             <FeatureCard 
               icon={<Brain className="text-neon-purple" />}
@@ -67,7 +67,7 @@ export default function About() {
         </div>
       </section>
 
-      <section className="py-20 px-6 max-w-5xl mx-auto flex flex-col md:flex-row items-center gap-12">
+      <section className="py-20 px-6 md:px-12 max-w-5xl mx-auto flex flex-col md:flex-row items-center gap-12">
         <div className="flex-1">
             <div className="inline-block bg-gray-800 px-3 py-1 rounded-full text-xs font-bold text-gray-400 mb-4 border border-gray-700">OUR MISSION</div>
             <h2 className="text-3xl font-bold mb-4">Empowering Students Everywhere</h2>
@@ -88,7 +88,7 @@ export default function About() {
       </section>
 
       
-      <section className="py-16 px-6 text-center">
+      <section className="py-16 px-6 md:px-12 text-center">
         <div className="max-w-3xl mx-auto p-8 rounded-3xl bg-dark-surface border border-gray-800 transition-all duration-300 hover:border-neon-green hover:shadow-[0_0_30px_rgba(57,255,20,0.1)] relative overflow-hidden group">
             
             <div className="absolute top-0 right-0 w-32 h-32 bg-neon-blue/5 rounded-full blur-[50px] pointer-events-none group-hover:bg-neon-green/5 transition-colors duration-500"></div>

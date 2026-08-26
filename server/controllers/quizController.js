@@ -13,11 +13,20 @@ const QuizSchema = z.array(z.object({
 
 export const getQuizzes = async (req, res) => {
   try {
-    const quizzes = await Quiz.getAll(req.query.course);
+    const { course, page, limit } = req.query;
+
+    if (page || limit) {
+      const pageNum = Math.max(1, parseInt(page) || 1);
+      const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 12));
+      const result = await Quiz.getAllPaginated(course, pageNum, limitNum);
+      return res.json(result);
+    }
+
+    const quizzes = await Quiz.getAll(course);
     res.json(quizzes);
   } catch (err) {
     console.error("GET Quizzes Error:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Failed to load quizzes" });
   }
 };
 
@@ -27,7 +36,8 @@ export const getQuizById = async (req, res) => {
     if (!quiz) return res.status(404).json({ error: "Not found" });
     res.json(quiz);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Get Quiz Error:", err);
+    res.status(500).json({ error: "Failed to load quiz" });
   }
 };
 
@@ -167,6 +177,6 @@ export const generateQuiz = async (req, res) => {
     res.json(newQuiz);
   } catch (err) {
     console.error("GENERATION ERROR:", err);
-    res.status(500).json({ error: "Failed to generate quiz. " + err.message });
+    res.status(500).json({ error: "Failed to generate quiz. Please try again." });
   }
 };
