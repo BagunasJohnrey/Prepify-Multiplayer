@@ -87,19 +87,34 @@ const callGroq = async (prompt, model) => {
   return extractJson(text);
 };
 
+const deadProviders = new Set();
+
 const tryProvider = async (name, key, models, callFn, prompt) => {
   if (!key) throw new Error(`Missing ${name} API key`);
+  if (deadProviders.has(name)) throw new Error(`${name} unavailable (cached)`);
+
+  console.log(`>> Trying ${name}...`);
   let lastError;
+  let allModelNotFound = true;
+
   for (const model of models) {
     try {
-      console.log(`>> Trying ${name} (${model})...`);
       const questions = await callFn(prompt, model);
       console.log(`>> Success with ${name} (${model})!`);
       return questions;
     } catch (err) {
-      console.warn(`>> ${name} (${model}) failed: ${err.message}`);
+      if (!/model_not_found|does not exist or you do not have access/i.test(err.message)) {
+        allModelNotFound = false;
+      }
       lastError = err;
     }
+  }
+
+  if (allModelNotFound) {
+    deadProviders.add(name);
+    console.log(`>> ${name}: no accessible models — skipped (set ${name.toUpperCase()}_MODELS to enable)`);
+  } else {
+    console.warn(`>> ${name} failed: ${lastError?.message || "all models failed"}`);
   }
   throw lastError || new Error(`${name} unavailable`);
 };
