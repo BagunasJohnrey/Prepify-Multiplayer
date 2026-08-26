@@ -102,7 +102,7 @@ export default function Documentation() {
               
               {/* Authentication */}
               <div id="auth" className="flex gap-5 scroll-mt-24">
-                <div className="bg-blue-500/10 p-3 rounded-xl h-fit text-blue-400 border border-blue-500/20"><Shield size={24} /></div>
+                <div className="bg-neon-blue/10 p-3 rounded-xl h-fit text-neon-blue border border-neon-blue/20"><Shield size={24} /></div>
                 <div>
                   <h3 className="text-lg font-bold text-white mb-2">Secure Authentication</h3>
                   <p className="text-gray-400 text-sm leading-relaxed">
@@ -113,7 +113,7 @@ export default function Documentation() {
               
               {/* Quiz Generation */}
               <div id="ai" className="flex gap-5 scroll-mt-24">
-                <div className="bg-purple-500/10 p-3 rounded-xl h-fit text-purple-400 border border-purple-500/20"><Brain size={24} /></div>
+                <div className="bg-neon-purple/10 p-3 rounded-xl h-fit text-neon-purple border border-neon-purple/20"><Brain size={24} /></div>
                 <div>
                   <h3 className="text-lg font-bold text-white mb-2">AI Quiz Generation</h3>
                   <p className="text-gray-400 text-sm leading-relaxed">
@@ -124,7 +124,7 @@ export default function Documentation() {
 
               {/* Heart System */}
               <div id="db" className="flex gap-5 scroll-mt-24">
-                <div className="bg-green-500/10 p-3 rounded-xl h-fit text-green-400 border border-green-500/20"><Heart size={24} /></div>
+                <div className="bg-neon-green/10 p-3 rounded-xl h-fit text-neon-green border border-neon-green/20"><Heart size={24} /></div>
                 <div>
                   <h3 className="text-lg font-bold text-white mb-2">Heart System & Persistence</h3>
                   <p className="text-gray-400 text-sm leading-relaxed">

@@ -28,7 +28,7 @@ export default function Navbar({ onOpenLogout }) {
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between relative">
         
         {/* Logo */}
-        <Link to={user ? "/dashboard" : "/"} className="text-2xl font-black tracking-tight text-white flex items-center">
+        <Link to={user ? "/dashboard" : "/"} className="logo-font text-2xl font-black tracking-tight text-white flex items-center">
           <span className="text-neon-blue">PREP</span>IFY
         </Link>
 

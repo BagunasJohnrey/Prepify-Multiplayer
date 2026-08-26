@@ -304,7 +304,7 @@ export default function Dashboard() {
                 className={`w-full mt-6 font-bold py-4 rounded-xl flex flex-col items-center justify-center transition shadow-lg ${
                   loading 
                     ? 'bg-gray-800 text-gray-400 cursor-not-allowed border border-gray-700' 
-                    : 'bg-linear-to-r from-neon-blue to-blue-600 text-black hover:shadow-[0_0_20px_rgba(0,243,255,0.4)] hover:scale-[1.02] active:scale-[0.98]'
+                    : 'bg-linear-to-r from-neon-blue to-neon-purple text-black hover:shadow-[0_0_20px_rgba(0,243,255,0.4)] hover:scale-[1.02] active:scale-[0.98]'
                 }`}
               >
                 {loading ? (

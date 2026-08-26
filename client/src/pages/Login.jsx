@@ -30,7 +30,7 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-dark-bg p-4">
       <div className="bg-dark-surface p-8 rounded-3xl border border-gray-800 w-full max-w-md shadow-2xl">
-        <h1 className="text-4xl font-black text-neon-blue mb-2 text-center">PREPIFY</h1>
+        <h1 className="logo-font text-4xl font-black text-neon-blue mb-2 text-center">PREPIFY</h1>
         <p className="text-gray-400 text-center mb-8 font-mono text-sm">AI-POWERED EXAM PREP</p>
         
         <form onSubmit={handleLogin} className="space-y-5">

@@ -5,7 +5,7 @@ export default function StoreModal({ isOpen, onClose, user, onBuyHeart }) {
 
   return (
     <div 
-        className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
         onClick={onClose}
     >
         <div 
@@ -42,7 +42,7 @@ export default function StoreModal({ isOpen, onClose, user, onBuyHeart }) {
                         disabled={user?.xp < 50}
                         className={`px-4 py-2 rounded-lg font-bold text-sm transition ${
                             (user?.xp || 0) >= 50
-                            ? 'bg-neon-blue text-black hover:bg-[#00d4ff] hover:shadow-[0_0_10px_rgba(0,212,255,0.4)]' 
+                            ? 'bg-neon-blue text-black hover:bg-[#00f3ff] hover:shadow-[0_0_10px_rgba(0,243,255,0.4)]' 
                             : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                         }`}
                     >

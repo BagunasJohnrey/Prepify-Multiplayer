@@ -380,7 +380,7 @@ export default function Multiplayer() {
     const renderGuestEntry = () => (
         <div className="flex flex-col items-center justify-center space-y-8 animate-fade-in text-center max-w-sm mx-auto w-full">
             <div className="mb-4">
-                <div className="w-20 h-20 bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-neon-blue shadow-[0_0_30px_rgba(37,99,235,0.3)] animate-pulse-slow">
+                    <div className="w-20 h-20 bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-neon-blue shadow-[0_0_30px_rgba(0,243,255,0.3)] animate-pulse-slow">
                     <UserPlus size={40} className="text-neon-blue" />
                 </div>
                 <h2 className="text-4xl font-black text-white mb-2">Identify Yourself</h2>
@@ -437,7 +437,7 @@ export default function Multiplayer() {
                     disabled={isRoomActionPending || quizzesLoading || availableQuizzes.length === 0 || !isConnected}
                     className="group relative h-64 rounded-3xl overflow-hidden text-left border border-white/5 bg-gray-900/40 hover:bg-gray-800/60 transition-all duration-300 hover:border-neon-blue/50 hover:shadow-[0_0_30px_rgba(0,243,255,0.1)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                    <div className="absolute inset-0 bg-gradient-to-br from-neon-blue/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                    <div className="absolute inset-0 bg-linear-to-br from-neon-blue/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                     
                     <div className="absolute top-6 left-6 bg-gray-800/80 p-4 rounded-2xl border border-white/10 text-neon-blue shadow-lg group-hover:scale-110 transition-transform duration-300">
                         <PlusCircle size={32} />
@@ -459,7 +459,7 @@ export default function Multiplayer() {
                     disabled={isRoomActionPending || !isConnected}
                     className="group relative h-64 rounded-3xl overflow-hidden text-left border border-white/5 bg-gray-900/40 hover:bg-gray-800/60 transition-all duration-300 hover:border-neon-green/50 hover:shadow-[0_0_30px_rgba(57,255,20,0.1)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                    <div className="absolute inset-0 bg-gradient-to-br from-neon-green/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                    <div className="absolute inset-0 bg-linear-to-br from-neon-green/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                     
                     <div className="absolute top-6 left-6 bg-gray-800/80 p-4 rounded-2xl border border-white/10 text-neon-green shadow-lg group-hover:scale-110 transition-transform duration-300">
                         <LogIn size={32} />
@@ -515,7 +515,7 @@ export default function Multiplayer() {
                 <Button type="button" onClick={handleCancel} variant="outline" className="border-gray-700 text-gray-400 hover:text-white hover:bg-gray-800 h-14">
                     Cancel
                 </Button>
-                <Button type="submit" variant="primary" className="bg-neon-green hover:bg-green-500 text-black font-bold h-14 shadow-[0_0_20px_rgba(34,197,94,0.2)]" disabled={isRoomActionPending || roomCode.length !== 4}>
+                    <Button type="submit" variant="primary" className="bg-neon-green hover:bg-[#39ff14] text-black font-bold h-14 shadow-[0_0_20px_rgba(57,255,20,0.2)]" disabled={isRoomActionPending || roomCode.length !== 4}>
                     Join Lobby
                 </Button>
             </div>
@@ -555,9 +555,9 @@ export default function Multiplayer() {
                         </div>
                         
                         {selectedQuizId && (
-                            <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-start gap-3">
-                                <AlertCircle size={18} className="text-blue-400 mt-0.5 shrink-0" />
-                                <p className="text-xs text-blue-200 leading-relaxed">
+                            <div className="p-4 bg-neon-blue/10 border border-neon-blue/20 rounded-xl flex items-start gap-3">
+                                <AlertCircle size={18} className="text-neon-blue mt-0.5 shrink-0" />
+                                <p className="text-xs text-neon-blue/80 leading-relaxed">
                                     The game will start once all players have joined the lobby. As the host, you control when the questions begin.
                                 </p>
                             </div>
@@ -570,7 +570,7 @@ export default function Multiplayer() {
                 <Button type="button" onClick={handleCancel} variant="outline" className="border-gray-700 text-gray-400 hover:text-white hover:bg-gray-800 h-14">
                     Cancel
                 </Button>
-                <Button type="submit" variant="success" className="h-14 font-bold text-lg shadow-[0_0_20px_rgba(0,243,255,0.2)] bg-linear-to-r from-blue-600 to-purple-600 border-none text-white hover:opacity-90" disabled={isRoomActionPending}>
+                <Button type="submit" variant="success" className="h-14 font-bold text-lg shadow-[0_0_20px_rgba(0,243,255,0.2)] bg-linear-to-r from-neon-blue to-neon-purple border-none text-white hover:opacity-90" disabled={isRoomActionPending}>
                     Create
                 </Button>
             </div>
@@ -597,7 +597,7 @@ export default function Multiplayer() {
                                 <Users size={16} /> Roster ({players.length})
                             </h3>
                             {lobbyData.host === currentUsername && (
-                                <span className="text-[10px] font-bold bg-purple-500/20 text-purple-300 px-2 py-1 rounded border border-purple-500/30">HOST</span>
+                                <span className="text-[10px] font-bold bg-neon-purple/20 text-neon-purple px-2 py-1 rounded border border-neon-purple/30">HOST</span>
                             )}
                         </div>
                         <div className="space-y-2 overflow-y-auto pr-2 custom-scrollbar flex-1">
@@ -634,7 +634,7 @@ export default function Multiplayer() {
                                     <div className="text-[10px] text-gray-500 font-bold uppercase">Room Code</div>
                                 </div>
                                 <button onClick={() => copyToClipboard(lobbyData.roomCode, 'code')} className="text-gray-400 hover:text-white p-2 hover:bg-white/10 rounded-lg transition">
-                                    {copiedField === 'code' ? <CheckCircle size={20} className="text-green-500" /> : <Copy size={20} />}
+                                    {copiedField === 'code' ? <CheckCircle size={20} className="text-neon-green" /> : <Copy size={20} />}
                                 </button>
                             </div>
                             
@@ -645,7 +645,7 @@ export default function Multiplayer() {
                                     <div className="text-xs text-gray-400 truncate w-full opacity-60">{inviteLink}</div>
                                 </div>
                                 <button className="text-gray-400 hover:text-white p-2 hover:bg-white/10 rounded-lg transition">
-                                    {copiedField === 'link' ? <CheckCircle size={20} className="text-green-500" /> : <Copy size={20} />}
+                                    {copiedField === 'link' ? <CheckCircle size={20} className="text-neon-green" /> : <Copy size={20} />}
                                 </button>
                             </div>
                         </div>
@@ -658,7 +658,7 @@ export default function Multiplayer() {
                     </Button>
                     
                     {lobbyData.host === currentUsername ? (
-                        <Button onClick={handleStartGame} variant="success" className="px-10 h-14 text-lg font-bold shadow-[0_0_20px_rgba(57,255,20,0.3)] bg-neon-green text-black hover:bg-[#32e010]">
+                        <Button onClick={handleStartGame} variant="success" className="px-10 h-14 text-lg font-bold shadow-[0_0_20px_rgba(57,255,20,0.3)] bg-neon-green text-black hover:bg-[#39ff14]">
                             Start Game <ArrowRight className="ml-2" />
                         </Button>
                     ) : (
@@ -766,7 +766,7 @@ export default function Multiplayer() {
                  <div className="fixed inset-0 z-50 pointer-events-none">
                      <Confetti width={windowSize.width} height={windowSize.height} recycle={false} numberOfPieces={800} gravity={0.2} />
                  </div>
-                <Trophy size={60} className="text-neon-yellow mx-auto" />
+                <Trophy size={60} className="text-yellow-400 mx-auto" />
                 <h2 className="text-4xl font-black text-white">Final Ranking</h2>
                 <p className="text-gray-400">Quiz: {lobbyData.quizTitle}</p>
                 <div className="bg-gray-900 p-4 rounded-2xl border border-gray-700 space-y-3">
@@ -826,12 +826,12 @@ export default function Multiplayer() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-dark-bg p-4 animate-fade-in">
+        <div className="min-h-screen flex items-center justify-center bg-dark-bg p-4 md:p-8 animate-fade-in">
             {/* Main Glassmorphic Container */}
-            <div className="bg-[#1a1a2e]/80 backdrop-blur-xl p-8 rounded-[2rem] border border-white/10 w-full max-w-4xl shadow-2xl relative overflow-hidden">
+            <div className="bg-dark-surface/80 backdrop-blur-xl p-8 rounded-3xl border border-white/10 w-full max-w-4xl shadow-2xl relative overflow-hidden">
                 
                 {/* Decorative Top Gradient Line */}
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-neon-blue via-purple-500 to-neon-green opacity-50"></div>
+                <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-neon-blue via-neon-purple to-neon-green opacity-50"></div>
                 
                 {renderContent()}
             </div>

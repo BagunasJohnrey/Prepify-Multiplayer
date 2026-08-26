@@ -30,7 +30,7 @@ export default function Register() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-dark-bg p-4">
       <div className="bg-dark-surface p-8 rounded-3xl border border-gray-800 w-full max-w-md shadow-2xl">
-        <h1 className="text-3xl font-bold text-white mb-2 text-center">Create Account</h1>
+        <h1 className="text-4xl font-black text-white mb-2 text-center">Create Account</h1>
         <p className="text-gray-400 text-center mb-8 text-sm">Join the Prepify community today.</p>
 
         <form onSubmit={handleRegister} className="space-y-5">

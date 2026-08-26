@@ -279,7 +279,7 @@ api.get(`/quiz/${id}`)
             
             <button 
               onClick={handleNext}
-              className="w-full bg-linear-to-r from-neon-blue to-blue-600 text-black font-bold py-4 rounded-xl hover:shadow-[0_0_20px_rgba(0,243,255,0.4)] transition transform hover:scale-[1.01] active:scale-[0.99]"
+              className="w-full bg-linear-to-r from-neon-blue to-neon-purple text-black font-bold py-4 rounded-xl hover:shadow-[0_0_20px_rgba(0,243,255,0.4)] transition transform hover:scale-[1.01] active:scale-[0.99]"
             >
               {currentQ + 1 === quiz.questions.length ? 'See Results' : 'Next Question'}
             </button>
