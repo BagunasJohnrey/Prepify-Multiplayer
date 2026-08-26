@@ -5,7 +5,27 @@ import { calculateHearts } from "../utils/heartSystem.js";
 import dotenv from "dotenv";
 
 dotenv.config();
-const JWT_SECRET = process.env.JWT_SECRET || "prepify_secure_secret";
+const JWT_SECRET = process.env.JWT_SECRET;
+const TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+const safeUser = (u) => ({
+  id: u.id,
+  username: u.username,
+  hearts: u.hearts,
+  xp: u.xp || 0,
+  last_heart_update: u.last_heart_update,
+  role: u.role
+});
+
+const setAuthCookie = (res, token) => {
+  res.cookie("token", token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: TOKEN_MAX_AGE_MS
+  });
+};
 
 export const register = async (req, res) => {
   const { username, password } = req.body;
@@ -22,10 +42,10 @@ export const login = async (req, res) => {
   const { username, password } = req.body;
   try {
     const user = await User.findByUsername(username);
-    if (!user) return res.status(400).json({ error: "User not found" });
+    if (!user) return res.status(401).json({ error: "Invalid credentials" });
 
     const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) return res.status(400).json({ error: "Invalid password" });
+    if (!valid) return res.status(401).json({ error: "Invalid credentials" });
 
     // Handle heart logic
     const stats = calculateHearts(user);
@@ -33,21 +53,16 @@ export const login = async (req, res) => {
         await User.updateHearts(user.id, stats.hearts, stats.last_heart_update);
     }
 
-    const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET);
-    
+    const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
+    setAuthCookie(res, token);
+
     res.json({ 
         token, 
-        user: { 
-            id: user.id, 
-            username: user.username, 
-            hearts: stats.hearts,
-            xp: user.xp || 0,
-            last_heart_update: stats.last_heart_update,
-            role: user.role
-        } 
+        user: safeUser({ ...user, hearts: stats.hearts, last_heart_update: stats.last_heart_update })
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("login error:", err);
+    res.status(500).json({ error: "Login failed" });
   }
 };
 
@@ -60,23 +75,20 @@ export const getMe = async (req, res) => {
        await User.updateHearts(user.id, stats.hearts, stats.last_heart_update);
     }
 
-    res.json({ 
-        ...user, 
-        hearts: stats.hearts, 
-        last_heart_update: stats.last_heart_update 
-    });
+    res.json(safeUser({ ...user, hearts: stats.hearts, last_heart_update: stats.last_heart_update }));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("getMe error:", err);
+    res.status(500).json({ error: "Failed to load user" });
   }
 };
 
 export const loseHeart = async (req, res) => {
-    const { userId } = req.body;
     try {
-        await User.decrementHeart(userId);
+        await User.decrementHeart(req.user.id);
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error("loseHeart error:", err);
+        res.status(500).json({ error: "Failed to update hearts" });
     }
 };
 
@@ -86,7 +98,8 @@ export const addXp = async (req, res) => {
         await User.addXp(req.user.id, amount);
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error("addXp error:", err);
+        res.status(500).json({ error: "Failed to update XP" });
     }
 };
 
@@ -96,6 +109,18 @@ export const buyHeart = async (req, res) => {
         await User.buyHeart(req.user.id, HEART_COST);
         res.json({ success: true });
     } catch (err) {
-        res.status(400).json({ error: err.message });
+        // "Not enough XP" is a user-facing, safe message; keep it, hide others.
+        const safe = err.message === "Not enough XP" ? err.message : "Failed to buy heart";
+        res.status(400).json({ error: safe });
     }
+};
+
+export const logout = (req, res) => {
+    res.clearCookie("token", {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/"
+    });
+    res.json({ success: true });
 };

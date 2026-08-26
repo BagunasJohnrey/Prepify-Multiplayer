@@ -19,7 +19,7 @@ const socket = io(API_BASE_URL, {
     transports: ['polling', 'websocket'], 
     
     forceNew: true,
-    withCredentials: false,
+    withCredentials: true,
     
     // Reduced timeout for faster failure/retry
     timeout: 15000, 

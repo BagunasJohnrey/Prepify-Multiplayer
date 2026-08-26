@@ -17,7 +17,7 @@ export const getQuizzes = async (req, res) => {
     res.json(quizzes);
   } catch (err) {
     console.error("GET Quizzes Error:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Failed to load quizzes" });
   }
 };
 
@@ -27,7 +27,8 @@ export const getQuizById = async (req, res) => {
     if (!quiz) return res.status(404).json({ error: "Not found" });
     res.json(quiz);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Get Quiz Error:", err);
+    res.status(500).json({ error: "Failed to load quiz" });
   }
 };
 
@@ -167,6 +168,6 @@ export const generateQuiz = async (req, res) => {
     res.json(newQuiz);
   } catch (err) {
     console.error("GENERATION ERROR:", err);
-    res.status(500).json({ error: "Failed to generate quiz. " + err.message });
+    res.status(500).json({ error: "Failed to generate quiz. Please try again." });
   }
 };

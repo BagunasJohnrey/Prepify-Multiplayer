@@ -14,6 +14,18 @@ export default {
     return result.rows[0];
   },
 
+  async createAdmin(username, passwordHash) {
+    const result = await pool.query(
+      "INSERT INTO users (username, password_hash, role, xp) VALUES ($1, $2, 'admin', 0) RETURNING id, username, role",
+      [username, passwordHash]
+    );
+    return result.rows[0];
+  },
+
+  async setAdmin(username) {
+    await pool.query("UPDATE users SET role = 'admin' WHERE username = $1", [username]);
+  },
+
   async findById(id) {
     const result = await pool.query("SELECT * FROM users WHERE id = $1", [id]);
     return result.rows[0];

@@ -2,6 +2,10 @@ import express from "express";
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from "cors";
+import helmet from "helmet";
+import cookieParser from "cookie-parser";
+import jwt from "jsonwebtoken";
+import cookie from "cookie";
 import dotenv from "dotenv";
 import rateLimit from "express-rate-limit"; 
 import authRoutes from "./routes/authRoutes.js";
@@ -11,6 +15,8 @@ import path from "path";
 import { fileURLToPath } from "url"; 
 
 dotenv.config();
+
+const JWT_SECRET = process.env.JWT_SECRET;
 
 const app = express();
 const httpServer = createServer(app);
@@ -33,7 +39,8 @@ const ANSWER_REVEAL_DELAY_MS = 5000;
 const io = new SocketIOServer(httpServer, {
     cors: {
         origin: allowedOrigins,
-        methods: ["GET", "POST"]
+        methods: ["GET", "POST"],
+        credentials: true
     },
     pingTimeout: 20000, 
     pingInterval: 5000,
@@ -42,10 +49,27 @@ const io = new SocketIOServer(httpServer, {
 
 app.set('socketio', io);
 
+// Optional auth for sockets: members identified via their httpOnly cookie, guests proceed anonymously.
+io.use((socket, next) => {
+    try {
+        const cookies = cookie.parse(socket.handshake.headers.cookie || "");
+        const token = cookies.token || socket.handshake.auth?.token;
+        if (token) {
+            socket.user = jwt.verify(token, JWT_SECRET);
+        }
+    } catch {
+        // Invalid/expired token → treat as guest, do not reject the connection.
+    }
+    next();
+});
+
 // Explicit Socket.IO Polling/Health Check Route
 app.get('/socket.io/', (req, res) => {
     res.status(200).send('Socket.IO health check successful.');
 });
+
+// Security headers
+app.use(helmet({ contentSecurityPolicy: false }));
 
 // Express CORS setup
 app.use(cors({
@@ -53,12 +77,25 @@ app.use(cors({
   credentials: true
 }));
 
+app.use(cookieParser());
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, 
   max: 100,
   message: "Too many requests from this IP, please try again later."
 });
 app.use("/api", limiter);
+
+// Strict limiter to prevent login brute-force / user enumeration
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Too many authentication attempts, please try again later."
+});
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/register", authLimiter);
 
 const generateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, 
@@ -167,6 +204,8 @@ const advanceGame = (roomCode, roomState) => {
             currentRoomState.qTimeout = setTimeout(() => {
                 advanceGame(roomCode, currentRoomState);
             }, QUESTION_TIME_MS);
+
+            currentRoomState.qStartTime = qStartTime;
             
             io.to(roomCode).emit('nextQuestion', {
                 qIndex: currentRoomState.currentQ,
@@ -184,18 +223,28 @@ io.on('connection', (socket) => {
     console.log('A user connected via socket:', socket.id);
 
     socket.on('createRoom', (data) => {
-        const { username, quizId } = data;
+        // Members are bound to their account username; guests use the client-supplied name.
+        const username = socket.user?.username || data.username;
+        const { quizId } = data;
+
+        if (rooms.size >= 1000) {
+            socket.emit('roomError', 'Server is at capacity. Please try again later.');
+            return;
+        }
+
         const roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
         
         socket.join(roomCode);
         
         const roomState = {
             roomCode,
+            hostSocketId: socket.id,
             host: username,
             quizId: quizId,
             players: [{ username, id: socket.id, score: 0, answers: [], lastScore: 0, socketId: socket.id }],
             currentQ: 0,
             quizData: null,
+            qStartTime: null,
             qTimeout: null 
         };
         rooms.set(roomCode, roomState);
@@ -205,7 +254,8 @@ io.on('connection', (socket) => {
     });
 
     socket.on('joinRoom', (data) => {
-        const { roomCode, username } = data;
+        const roomCode = data.roomCode;
+        const username = socket.user?.username || data.username;
         const roomState = rooms.get(roomCode);
         
         if (!roomState) {
@@ -230,7 +280,7 @@ io.on('connection', (socket) => {
         const { roomCode, quizId } = data;
         const roomState = rooms.get(roomCode);
         
-        if (!roomState || roomState.host !== roomState.players.find(p => p.socketId === socket.id)?.username) {
+        if (!roomState || roomState.hostSocketId !== socket.id) {
              socket.emit('roomError', 'Access Denied: Only host can start game.');
              return;
         }
@@ -272,6 +322,8 @@ io.on('connection', (socket) => {
                     advanceGame(roomCode, currentRoomState);
                 }, QUESTION_TIME_MS);
 
+                currentRoomState.qStartTime = qStartTime;
+
                 io.to(roomCode).emit('nextQuestion', {
                     qIndex: currentRoomState.currentQ,
                     question: currentRoomState.quizData[currentRoomState.currentQ],
@@ -289,7 +341,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('submitAnswer', (data) => {
-        const { selected, time_ms, roomCode } = data;
+        const { selected, roomCode } = data;
         const roomState = rooms.get(roomCode);
         
         if (!roomState) return;
@@ -301,7 +353,9 @@ io.on('connection', (socket) => {
 
         if (roomState.players[playerIndex].answers[qIndex] || roomState.qTimeout === null) return;
 
-        const finalTime = Math.min(time_ms, QUESTION_TIME_MS);
+        // Measure answer time on the server to prevent clients from faking speed bonuses
+        const elapsed = roomState.qStartTime ? Date.now() - roomState.qStartTime : 0;
+        const finalTime = Math.max(0, Math.min(elapsed, QUESTION_TIME_MS));
 
         roomState.players[playerIndex].answers[qIndex] = { selected, time_ms: finalTime };
         
@@ -400,10 +454,15 @@ function selfPing() {
         .catch(err => console.error(`Self-ping failed: ${err.message}`));
 }
 
-httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Prepify Server running on port ${PORT}`);
-  if (RENDER_HOSTNAME !== 'localhost' && RENDER_HOSTNAME !== undefined) {
-      console.log(`Self-ping scheduled every ${PING_INTERVAL / 60000} minutes to ${PING_URL}`);
-      setInterval(selfPing, PING_INTERVAL);
-  }
-});
+// Only start listening when run directly (not when imported by tests)
+if (process.env.NODE_ENV !== "test") {
+  httpServer.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Prepify Server running on port ${PORT}`);
+    if (RENDER_HOSTNAME !== 'localhost' && RENDER_HOSTNAME !== undefined) {
+        console.log(`Self-ping scheduled every ${PING_INTERVAL / 60000} minutes to ${PING_URL}`);
+        setInterval(selfPing, PING_INTERVAL);
+    }
+  });
+}
+
+export default app;

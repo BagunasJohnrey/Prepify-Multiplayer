@@ -17,7 +17,7 @@ export default function Login() {
     setLoading(true);
     try {
       const { data } = await api.post('/auth/login', formData);
-      login(data.token, data.user);
+      login(data.user);
       toast.success("Login successful!", { duration: 1500 });
       navigate('/dashboard');
     } catch (err) {
