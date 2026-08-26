@@ -8,6 +8,8 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Quiz from './pages/Quiz';
 import Result from './pages/Result';
+import Profile from './pages/Profile';
+import CompleteProfile from './pages/CompleteProfile';
 import About from './pages/About';
 import Documentation from './pages/Documentation';
 import Multiplayer from './pages/Multiplayer';
@@ -57,6 +59,8 @@ export default function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/quiz/:id" element={<Quiz />} />
               <Route path="/result" element={<Result />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/complete-profile" element={<CompleteProfile />} />
               
             </Route>
 

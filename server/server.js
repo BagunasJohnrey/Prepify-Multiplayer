@@ -96,6 +96,7 @@ const authLimiter = rateLimit({
 });
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
+app.use("/api/auth/google", authLimiter);
 
 const generateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, 

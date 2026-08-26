@@ -9,8 +9,26 @@ export default {
     return result.rows[0];
   },
 
+  async createGoogleUser(username, email, avatarUrl, googleId) {
+    const result = await pool.query(
+      "INSERT INTO users (username, email, avatar_url, google_id, role, xp) VALUES ($1, $2, $3, $4, 'user', 0) RETURNING *",
+      [username, email, avatarUrl, googleId]
+    );
+    return result.rows[0];
+  },
+
   async findByUsername(username) {
     const result = await pool.query("SELECT * FROM users WHERE username = $1", [username]);
+    return result.rows[0];
+  },
+
+  async findByGoogleId(googleId) {
+    const result = await pool.query("SELECT * FROM users WHERE google_id = $1", [googleId]);
+    return result.rows[0];
+  },
+
+  async findByEmail(email) {
+    const result = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
     return result.rows[0];
   },
 
@@ -29,6 +47,37 @@ export default {
   async findById(id) {
     const result = await pool.query("SELECT * FROM users WHERE id = $1", [id]);
     return result.rows[0];
+  },
+
+  async updateProfile(id, fields) {
+    const allowed = ["username", "email", "avatar_url"];
+    const updates = [];
+    const values = [];
+    let idx = 1;
+
+    for (const key of allowed) {
+      if (fields[key] !== undefined) {
+        updates.push(`${key} = $${idx}`);
+        values.push(fields[key]);
+        idx++;
+      }
+    }
+
+    if (updates.length === 0) return;
+
+    values.push(id);
+    await pool.query(`UPDATE users SET ${updates.join(", ")} WHERE id = $${idx}`, values);
+  },
+
+  async linkGoogleAccount(id, googleId, avatarUrl) {
+    await pool.query(
+      "UPDATE users SET google_id = $1, avatar_url = COALESCE($2, avatar_url) WHERE id = $3",
+      [googleId, avatarUrl, id]
+    );
+  },
+
+  async markProfileComplete(id) {
+    await pool.query("UPDATE users SET profile_complete = true WHERE id = $1", [id]);
   },
 
   async updateHearts(id, hearts, lastHeartUpdate) {
