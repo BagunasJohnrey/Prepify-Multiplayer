@@ -11,7 +11,7 @@ const GROQ_KEY = process.env.GROQ_API_KEY;
 
 const geminiModels = (process.env.GEMINI_MODELS || "gemini-2.5-flash,gemini-2.5-pro")
   .split(",").map((s) => s.trim()).filter(Boolean);
-const groqModels = (process.env.GROQ_MODELS || "llama-4-scout-17b-16e-instruct,llama-4-maverick-17b-128e-instruct,gpt-oss-120b,gemma-2-9b-it")
+const groqModels = (process.env.GROQ_MODELS || "openai/gpt-oss-120b,qwen/qwen3.8-27b,qwen/qwen3.6-27b,openai/gpt-oss-20b,groq/compound-mini")
   .split(",").map((s) => s.trim()).filter(Boolean);
 
 let toggle = 0;
