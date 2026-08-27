@@ -11,6 +11,7 @@ import rateLimit from "express-rate-limit";
 import authRoutes from "./routes/authRoutes.js";
 import quizRoutes from "./routes/quizRoutes.js";
 import Quiz from "./models/Quiz.js"; 
+import { userOnline, userOffline, getSocketIds } from "./utils/presence.js";
 import path from "path"; 
 import { fileURLToPath } from "url"; 
 
@@ -220,8 +221,9 @@ const advanceGame = (roomCode, roomState) => {
     }
 };
 
-io.on('connection', (socket) => {
-    console.log('A user connected via socket:', socket.id);
+ io.on('connection', (socket) => {
+    const connUsername = socket.user?.username;
+    if (connUsername) userOnline(connUsername, socket.id);
 
     socket.on('createRoom', (data) => {
         // Members are bound to their account username; guests use the client-supplied name.
@@ -277,6 +279,17 @@ io.on('connection', (socket) => {
         socket.to(roomCode).emit('lobbyUpdate', getSafeRoomState(roomState)); 
     });
 
+    socket.on('lobbyChat', (data) => {
+        const roomCode = data.roomCode;
+        const roomState = rooms.get(roomCode);
+        if (!roomState) return;
+        const username = socket.user?.username || data.username;
+        const message = String(data.message || '').slice(0, 500).trim();
+        if (!message) return;
+        const payload = { username, message, timestamp: Date.now() };
+        io.to(roomCode).emit('lobbyChat', payload);
+    });
+
     socket.on('startGame', async (data) => {
         const { roomCode, quizId } = data;
         const roomState = rooms.get(roomCode);
@@ -299,7 +312,6 @@ io.on('connection', (socket) => {
             } else if (Array.isArray(quiz.questions)) {
                  roomState.quizData = quiz.questions; 
             } else {
-                 console.error(`Quiz data for ID ${quizId} is not a valid structure.`);
                  io.to(roomCode).emit('roomError', 'Quiz data structure is invalid.');
                  return;
             }
@@ -336,7 +348,6 @@ io.on('connection', (socket) => {
             }, 5000); 
             
         } catch (error) {
-            console.error('Fatal Error fetching quiz data:', error);
             io.to(roomCode).emit('roomError', 'Internal server error starting game.');
         }
     });
@@ -371,7 +382,41 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('sendInvite', (data) => {
+        const { toUsername } = data;
+        const fromUsername = socket.user?.username;
+        if (!fromUsername || !toUsername) return;
+
+        const targetSocketIds = getSocketIds(toUsername);
+        if (targetSocketIds.length === 0) {
+            socket.emit('inviteError', { username: toUsername, error: 'User is not online' });
+            return;
+        }
+
+        targetSocketIds.forEach(socketId => {
+            io.to(socketId).emit('gameInvite', {
+                fromUsername,
+                fromSocketId: socket.id
+            });
+        });
+
+        socket.emit('inviteSent', { username: toUsername });
+    });
+
+    socket.on('respondInvite', (data) => {
+        const { toSocketId, accepted } = data;
+        const fromUsername = socket.user?.username;
+        if (!fromUsername || !toSocketId) return;
+
+        io.to(toSocketId).emit('inviteResponse', {
+            fromUsername,
+            accepted
+        });
+    });
+
     socket.on('disconnect', () => {
+        if (connUsername) userOffline(connUsername, socket.id);
+
         const roomInfo = findRoomBySocketId(socket.id);
 
         if (roomInfo) {
@@ -451,8 +496,7 @@ const PING_INTERVAL = 600000;
 function selfPing() {
     if (RENDER_HOSTNAME === 'localhost' || RENDER_HOSTNAME === undefined) return;
     fetch(PING_URL + '/api/quizzes', { headers: { 'User-Agent': 'Render-Self-Pinger' } })
-        .then(response => console.log(`Self-ping successful: Status ${response.status}`))
-        .catch(err => console.error(`Self-ping failed: ${err.message}`));
+        .catch(() => {});
 }
 
 // Only start listening when run directly (not when imported by tests)
