@@ -1,118 +1,90 @@
-import { useState, useEffect, useRef, useCallback } from 'react'; 
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Users, PlusCircle, LogIn, Loader, Clock, Trophy, Zap, AlertCircle, CheckCircle, XCircle, Copy, Link as LinkIcon, Share2, User, KeyRound, ArrowRight, UserPlus, ArrowLeft, Gamepad2 } from 'lucide-react';
+import { Users, PlusCircle, LogIn, Loader, Clock, Trophy, Zap, AlertCircle, CheckCircle, XCircle, Copy, Link as LinkIcon, Share2, User, KeyRound, ArrowRight, UserPlus, ArrowLeft, Gamepad2, MessageCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import toast from 'react-hot-toast';
-import socket from '../utils/socket'; 
-import api from '../utils/api'; 
-import Confetti from 'react-confetti'; 
+import socket from '../utils/socket';
+import api from '../utils/api';
+import Confetti from 'react-confetti';
 import { QRCodeSVG } from 'qrcode.react';
 
-const COUNTDOWN_SECONDS = 5; 
-const QUESTION_TIME_MS = 20000; 
-const ANSWER_REVEAL_DELAY_MS = 5000; 
+const COUNTDOWN_SECONDS = 5;
+const QUESTION_TIME_MS = 20000;
+const ANSWER_REVEAL_DELAY_MS = 5000;
 
 export default function Multiplayer() {
     const { user, loading: authLoading } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
-    
-    // --- GUEST STATE ---
-    const [guestName, setGuestName] = useState('');
-    const [isGuestSetup, setIsGuestSetup] = useState(false); 
 
-    // Determine the active username
+    const [guestName, setGuestName] = useState('');
+    const [isGuestSetup, setIsGuestSetup] = useState(false);
     const currentUsername = user?.username || (isGuestSetup ? guestName : null);
 
-    // View State
-    const [view, setView] = useState('loading'); 
+    const [view, setView] = useState('loading');
     const [roomCode, setRoomCode] = useState('');
-    const [lobbyData, setLobbyData] = useState(null); 
+    const [lobbyData, setLobbyData] = useState(null);
     const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
-    const [isConnected, setIsConnected] = useState(socket.connected); 
-    const [isRoomActionPending, setIsRoomActionPending] = useState(false); 
+    const [isConnected, setIsConnected] = useState(socket.connected);
+    const [isRoomActionPending, setIsRoomActionPending] = useState(false);
     const [copiedField, setCopiedField] = useState(null);
-    
-    // Game State
+
     const [gameQuestions, setGameQuestions] = useState(null);
     const [currentQIndex, setCurrentQIndex] = useState(0);
     const [playerRanking, setPlayerRanking] = useState(null);
     const [isAnswered, setIsAnswered] = useState(false);
-    const [showAnswerKey, setShowAnswerKey] = useState(false); 
-    const [qAnswer, setQAnswer] = useState(null); 
-    
-    // Timer State
+    const [showAnswerKey, setShowAnswerKey] = useState(false);
+    const [qAnswer, setQAnswer] = useState(null);
+    const [questionResults, setQuestionResults] = useState([]);
+
     const [timeLeft, setTimeLeft] = useState(QUESTION_TIME_MS / 1000);
-    const qTimerIntervalRef = useRef(null); 
-    const roomActionTimeoutRef = useRef(null); 
-    const [playerAnswerLocal, setPlayerAnswerLocal] = useState(null); 
-    
+    const qTimerIntervalRef = useRef(null);
+    const roomActionTimeoutRef = useRef(null);
+    const revealTimerRef = useRef(null);
+    const [revealCountdown, setRevealCountdown] = useState(ANSWER_REVEAL_DELAY_MS / 1000);
+    const [playerAnswerLocal, setPlayerAnswerLocal] = useState(null);
+
     const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
     const [availableQuizzes, setAvailableQuizzes] = useState([]);
     const [quizzesLoading, setQuizzesLoading] = useState(true);
     const [selectedQuizId, setSelectedQuizId] = useState(null);
+    const [chatMessages, setChatMessages] = useState([]);
+    const [chatInput, setChatInput] = useState('');
+    const chatEndRef = useRef(null);
 
-    // --- State Ref ---
     const stateRef = useRef({
-        availableQuizzes,
-        currentQIndex,
-        user,
-        guestName,
-        isGuestSetup,
-        view,
-        lobbyData,
-        roomCode
+        availableQuizzes, currentQIndex, user, guestName, isGuestSetup, view, lobbyData, roomCode
     });
 
     useEffect(() => {
-        stateRef.current = {
-            availableQuizzes,
-            currentQIndex,
-            user,
-            guestName,
-            isGuestSetup,
-            view,
-            lobbyData,
-            roomCode
-        };
+        stateRef.current = { availableQuizzes, currentQIndex, user, guestName, isGuestSetup, view, lobbyData, roomCode };
     }, [availableQuizzes, currentQIndex, user, guestName, isGuestSetup, view, lobbyData, roomCode]);
 
-    // --- ACTIONS ---
-    
     const handleCancel = useCallback(() => {
         setIsRoomActionPending(false);
-        setRoomCode(''); 
+        setRoomCode('');
         setView('menu');
         toast.dismiss();
         navigate('/multiplayer', { replace: true });
     }, [navigate]);
 
-    // --- AUTH & INITIALIZATION ---
     useEffect(() => {
         if (authLoading) return;
-
         if (user) {
             if (view === 'loading' || view === 'guest_entry') setView('menu');
         } else {
-            if (!isGuestSetup && view !== 'guest_entry') {
-                setView('guest_entry');
-            } else if (isGuestSetup && view === 'loading') {
-                setView('menu');
-            }
+            if (!isGuestSetup && view !== 'guest_entry') setView('guest_entry');
         }
     }, [user, authLoading, isGuestSetup, view]);
 
     useEffect(() => {
         const searchParams = new URLSearchParams(location.search);
         const codeParam = searchParams.get('code');
-        
         if (codeParam) {
             const cleanCode = codeParam.toUpperCase();
-            if (cleanCode !== roomCode) {
-                setRoomCode(cleanCode);
-            }
+            if (cleanCode !== roomCode) setRoomCode(cleanCode);
             if (currentUsername && view === 'menu') {
                 setView('join');
                 toast.success('Room code found! Click Enter to join.', { icon: '🔗', id: 'join-toast' });
@@ -126,15 +98,12 @@ export default function Multiplayer() {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // --- Data Fetching ---
     useEffect(() => {
         const fetchQuizzes = async () => {
             try {
                 const { data } = await api.get('/quizzes');
                 setAvailableQuizzes(data);
-                if (data.length > 0) {
-                    setSelectedQuizId(String(data[0].id)); 
-                }
+                if (data.length > 0) setSelectedQuizId(String(data[0].id));
             } catch {
                 toast.error("Failed to load quizzes.", { duration: 3000 });
             } finally {
@@ -144,120 +113,117 @@ export default function Multiplayer() {
         fetchQuizzes();
     }, []);
 
-    // Watchdog Timer
     useEffect(() => {
         if (view === 'loading' && isRoomActionPending) {
             roomActionTimeoutRef.current = setTimeout(() => {
                 toast.error("Request timed out.", { duration: 4000 });
-                handleCancel(); 
-            }, 10000); 
+                handleCancel();
+            }, 10000);
         } else {
             if (roomActionTimeoutRef.current) clearTimeout(roomActionTimeoutRef.current);
         }
-        return () => {
-            if (roomActionTimeoutRef.current) clearTimeout(roomActionTimeoutRef.current);
-        };
-    }, [view, isRoomActionPending, handleCancel]); 
+        return () => { if (roomActionTimeoutRef.current) clearTimeout(roomActionTimeoutRef.current); };
+    }, [view, isRoomActionPending, handleCancel]);
 
-    // --- Timer Logic ---
     const startQuestionTimer = (durationSeconds) => {
         if (qTimerIntervalRef.current) clearInterval(qTimerIntervalRef.current);
         setTimeLeft(durationSeconds);
         qTimerIntervalRef.current = setInterval(() => {
             setTimeLeft(prev => {
-                if (prev <= 1) {
-                    clearInterval(qTimerIntervalRef.current);
-                    return 0;
-                }
+                if (prev <= 1) { clearInterval(qTimerIntervalRef.current); return 0; }
                 return prev - 1;
             });
-        }, 1000); 
+        }, 1000);
     };
+
+    useEffect(() => {
+        if (showAnswerKey && revealCountdown > 0) {
+            revealTimerRef.current = setInterval(() => {
+                setRevealCountdown(prev => {
+                    if (prev <= 1) {
+                        clearInterval(revealTimerRef.current);
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+        }
+        return () => { if (revealTimerRef.current) clearInterval(revealTimerRef.current); };
+    }, [showAnswerKey]);
 
     const stopQuestionTimer = () => {
         if (qTimerIntervalRef.current) clearInterval(qTimerIntervalRef.current);
         qTimerIntervalRef.current = null;
     };
-    
-    // --- Socket Listeners ---
+
     useEffect(() => {
         let countdownInterval;
         if (socket.connected) setIsConnected(true);
 
         const onConnect = () => setIsConnected(true);
         const onDisconnect = () => setIsConnected(false);
-        
+
         socket.on('connect', onConnect);
         socket.on('disconnect', onDisconnect);
 
         const handleLobbyUpdate = (data) => {
-            setIsRoomActionPending(false); 
+            setIsRoomActionPending(false);
             const { availableQuizzes } = stateRef.current;
             const quiz = availableQuizzes.find(q => String(q.id) === String(data.quizId));
             const quizTitle = quiz ? quiz.title : 'Unknown Quiz';
-            
             navigate('/multiplayer', { replace: true });
-
             setLobbyData({
-                roomCode: data.roomCode,
-                quizId: data.quizId,
-                quizTitle: quizTitle,
+                roomCode: data.roomCode, quizId: data.quizId, quizTitle,
                 host: data.host,
-                players: data.players.map(p => ({
-                    ...p,
-                    isHost: p.username === data.host
-                }))
+                players: data.players.map(p => ({ ...p, isHost: p.username === data.host }))
             });
-            setView('lobby'); 
+            setView('lobby');
         };
-        
+
         const handlePlayerAnswered = (data) => {
             const { currentQIndex } = stateRef.current;
-            if (data.qIndex === currentQIndex) {
-                 toast(`${data.username} submitted an answer!`, { icon: '⚡' });
-            }
+            if (data.qIndex === currentQIndex) toast(`${data.username} submitted an answer!`, { icon: '⚡' });
         };
 
         const handleStartCountdown = (data) => {
-            // Shuffle options for every question received
-            const shuffledQuizData = data.quizData.map(q => ({
-                ...q,
-                options: [...q.options].sort(() => Math.random() - 0.5)
-            }));
-            
+            const shuffledQuizData = data.quizData.map(q => ({ ...q, options: [...q.options].sort(() => Math.random() - 0.5) }));
             setGameQuestions(shuffledQuizData);
             setCurrentQIndex(0);
             setIsAnswered(false);
             setShowAnswerKey(false);
-            setPlayerAnswerLocal(null); 
-            setLobbyData(prev => ({...prev, quizTitle: data.quizTitle}));
-            
+            setPlayerAnswerLocal(null);
+            setQuestionResults([]);
+            setLobbyData(prev => ({ ...prev, quizTitle: data.quizTitle }));
             const durationSec = data.duration ? (data.duration / 1000) : COUNTDOWN_SECONDS;
             setCountdown(durationSec);
             setView('countdown');
-            
             if (countdownInterval) clearInterval(countdownInterval);
-
             countdownInterval = setInterval(() => {
-                setCountdown(c => {
-                    if (c <= 1) {
-                        clearInterval(countdownInterval);
-                        return 0;
-                    }
-                    return c - 1;
-                });
+                setCountdown(c => { if (c <= 1) { clearInterval(countdownInterval); return 0; } return c - 1; });
             }, 1000);
         };
-        
+
         const handleShowAnswer = (data) => {
             stopQuestionTimer();
             setLobbyData(prev => ({ ...prev, players: data.players }));
-            setQAnswer({
+            setQAnswer({ correctAnswer: data.correctAnswer, explanation: data.correctExplanation, isLastQuestion: data.isLastQuestion });
+            setShowAnswerKey(true);
+            setRevealCountdown(ANSWER_REVEAL_DELAY_MS / 1000);
+
+            const state = stateRef.current;
+            const q = state.gameQuestions?.[data.qIndex];
+            const me = data.players?.find(p => p.username === state.currentUsername);
+            const myAnswer = me?.answers?.[data.qIndex];
+            setQuestionResults(prev => [...prev, {
+                qIndex: data.qIndex,
+                question: q?.question || '',
+                options: q?.options || [],
                 correctAnswer: data.correctAnswer,
                 explanation: data.correctExplanation,
-                isLastQuestion: data.isLastQuestion,
-            });
-            setShowAnswerKey(true); 
+                playerAnswer: myAnswer?.selected || null,
+                isCorrect: myAnswer?.selected === data.correctAnswer,
+                points: me?.lastScore || 0,
+            }]);
         };
 
         const handleNextQuestion = (data) => {
@@ -266,36 +232,37 @@ export default function Multiplayer() {
             setIsAnswered(false);
             setShowAnswerKey(false);
             setQAnswer(null);
-            setPlayerAnswerLocal(null); 
+            setPlayerAnswerLocal(null);
             const durationSec = data.duration ? (data.duration / 1000) : 10;
             startQuestionTimer(durationSec);
             toast.success(`Next Question!`, { duration: 1500 });
             setView('game');
         };
-        
+
         const handleShowResults = (data) => {
             setPlayerRanking(data.finalRanking);
             setLobbyData(prev => ({ ...prev, players: data.finalRanking }));
             setView('results');
             toast.success("Game Over!", { duration: 5000 });
         };
-        
+
         const handleRoomError = (message) => {
-            setIsRoomActionPending(false); 
+            setIsRoomActionPending(false);
             toast.error(message, { duration: 3000 });
-            if (stateRef.current.view === 'loading') {
-                handleCancel();
-            }
+            if (stateRef.current.view === 'loading') handleCancel();
         };
 
-        socket.on('lobbyUpdate', handleLobbyUpdate); 
-        socket.on('playerJoined', (data) => toast.success(`${data.username} joined!`)); 
-        socket.on('playerAnswered', handlePlayerAnswered); 
-        socket.on('startCountdown', handleStartCountdown); 
-        socket.on('showAnswer', handleShowAnswer); 
+        const handleLobbyChat = (data) => setChatMessages(prev => [...prev, data]);
+
+        socket.on('lobbyUpdate', handleLobbyUpdate);
+        socket.on('playerJoined', (data) => toast.success(`${data.username} joined!`));
+        socket.on('playerAnswered', handlePlayerAnswered);
+        socket.on('startCountdown', handleStartCountdown);
+        socket.on('showAnswer', handleShowAnswer);
         socket.on('nextQuestion', handleNextQuestion);
         socket.on('showResults', handleShowResults);
         socket.on('roomError', handleRoomError);
+        socket.on('lobbyChat', handleLobbyChat);
 
         return () => {
             socket.off('connect', onConnect);
@@ -308,12 +275,12 @@ export default function Multiplayer() {
             socket.off('nextQuestion', handleNextQuestion);
             socket.off('showResults', handleShowResults);
             socket.off('roomError');
+            socket.off('lobbyChat', handleLobbyChat);
             if (countdownInterval) clearInterval(countdownInterval);
+            if (revealTimerRef.current) clearInterval(revealTimerRef.current);
             stopQuestionTimer();
         };
     }, [handleCancel, navigate]);
-
-    // --- OTHER ACTIONS ---
 
     const handleGuestEntry = (e) => {
         e.preventDefault();
@@ -324,26 +291,56 @@ export default function Multiplayer() {
 
     const handleCreateRoom = (e) => {
         e.preventDefault();
-        if (!isConnected || isRoomActionPending) return toast.error("Connection or previous action pending.");
+        if (isRoomActionPending) return toast.error("Already connecting...");
         if (quizzesLoading || availableQuizzes.length === 0) return toast.error("Please wait for quizzes to load.");
         if (!currentUsername) return toast.error("Identity error. Please reload.");
         if (!selectedQuizId) return toast.error("Please select a quiz.");
-        
-        setView('loading');
-        setIsRoomActionPending(true); 
-        socket.emit('createRoom', { username: currentUsername, quizId: selectedQuizId });
+
+        setChatMessages([]);
+
+        if (!socket.connected) {
+            socket.connect();
+            socket.once('connect', () => {
+                setView('loading');
+                setIsRoomActionPending(true);
+                socket.emit('createRoom', { username: currentUsername, quizId: selectedQuizId });
+            });
+            socket.once('connect_error', () => {
+                toast.error("Failed to connect to server. Try again.");
+            });
+        } else {
+            setView('loading');
+            setIsRoomActionPending(true);
+            socket.emit('createRoom', { username: currentUsername, quizId: selectedQuizId });
+        }
     };
 
     const handleJoinRoom = (e) => {
         e.preventDefault();
-        if (!isConnected || isRoomActionPending) return toast.error("Connection or previous action pending.");
+        if (isRoomActionPending) return toast.error("Already connecting...");
         const code = roomCode.toUpperCase();
-        if (!currentUsername || code.length !== 4) return toast.error("Invalid Room Code or Username.");
-        
-        setView('loading');
+        if (!currentUsername || code.length !== 4) return toast.error("Enter a valid 4-letter code and name.");
+
+        setChatMessages([]);
         setRoomCode(code);
-        setIsRoomActionPending(true); 
-        socket.emit('joinRoom', { roomCode: code, username: currentUsername });
+
+        // Ensure socket is connected before emitting
+        if (!socket.connected) {
+            socket.connect();
+            socket.once('connect', () => {
+                setView('loading');
+                setIsRoomActionPending(true);
+                socket.emit('joinRoom', { roomCode: code, username: currentUsername });
+            });
+            socket.once('connect_error', () => {
+                toast.error("Failed to connect to server. Try again.");
+                setView('join');
+            });
+        } else {
+            setView('loading');
+            setIsRoomActionPending(true);
+            socket.emit('joinRoom', { roomCode: code, username: currentUsername });
+        }
     };
 
     const handleStartGame = () => {
@@ -354,18 +351,25 @@ export default function Multiplayer() {
     const handleGameAnswer = (selectedOption) => {
         if (isAnswered || !lobbyData || showAnswerKey || timeLeft <= 0) return;
         setIsAnswered(true);
-        setPlayerAnswerLocal(selectedOption); 
-        const timeTaken = (QUESTION_TIME_MS / 1000 - timeLeft) * 1000; 
+        setPlayerAnswerLocal(selectedOption);
+        const timeTaken = (QUESTION_TIME_MS / 1000 - timeLeft) * 1000;
         socket.emit('submitAnswer', { roomCode: lobbyData.roomCode, selected: selectedOption, time_ms: timeTaken });
         toast.success("Answer sent!", { duration: 1000 });
     };
-    
+
     const leaveRoom = () => {
-        if (lobbyData) {
-            socket.emit('leaveRoom', { roomCode: lobbyData.roomCode });
-        }
+        if (lobbyData) socket.emit('leaveRoom', { roomCode: lobbyData.roomCode });
         setLobbyData(null);
+        setChatMessages([]);
         handleCancel();
+    };
+
+    const sendChat = (e) => {
+        e.preventDefault();
+        const message = chatInput.trim();
+        if (!message || !lobbyData) return;
+        socket.emit('lobbyChat', { roomCode: lobbyData.roomCode, username: currentUsername, message });
+        setChatInput('');
     };
 
     const copyToClipboard = (text, field) => {
@@ -375,109 +379,130 @@ export default function Multiplayer() {
         setTimeout(() => setCopiedField(null), 2000);
     };
 
+    useEffect(() => {
+        if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }, [chatMessages]);
+
     // --- RENDERERS ---
 
     const renderGuestEntry = () => (
-        <div className="flex flex-col items-center justify-center space-y-8 animate-fade-in text-center max-w-sm mx-auto w-full">
-            <div className="mb-4">
-                    <div className="w-20 h-20 bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-neon-blue shadow-[0_0_30px_rgba(0,243,255,0.3)] animate-pulse-slow">
-                    <UserPlus size={40} className="text-neon-blue" />
-                </div>
-                <h2 className="text-4xl font-black text-white mb-2">Identify Yourself</h2>
-                <p className="text-gray-400 text-sm">Enter a temporary nickname to join the arena.</p>
-            </div>
+        <div className="bg-[#0b0b12] flex items-center justify-center p-4">
+            <div className="w-full max-w-md animate-fade-in">
+                <div className="bg-[#12121b] rounded-2xl border border-white/[0.06] p-8 text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-neon-purple/10 border border-neon-purple/20 flex items-center justify-center text-neon-purple mx-auto mb-6 shadow-[0_0_30px_rgba(188,19,254,0.15)]">
+                        <UserPlus size={32} />
+                    </div>
+                    <h2 className="text-2xl font-bold text-white mb-2">Identify Yourself</h2>
+                    <p className="text-gray-400 text-sm mb-8">Enter a temporary nickname to join the arena.</p>
 
-            <div className="w-full space-y-6">
-                <form onSubmit={handleGuestEntry} className="space-y-4">
-                    <Input 
-                        placeholder="e.g. Maverick" 
-                        value={guestName} 
-                        onChange={(e) => setGuestName(e.target.value)} 
-                        className="text-center h-14 text-lg bg-gray-900/50 border-gray-700 focus:border-neon-blue font-bold tracking-wide"
-                    />
-                    <Button type="submit" variant="primary" className="w-full h-14 text-lg font-bold shadow-lg shadow-blue-500/20">
-                        Continue as Guest <ArrowRight size={18} className="ml-2" />
+                    <form onSubmit={handleGuestEntry} className="space-y-4">
+                        <input
+                            type="text"
+                            placeholder="e.g. Maverick"
+                            value={guestName}
+                            onChange={(e) => setGuestName(e.target.value)}
+                            className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-white text-center text-lg font-bold tracking-wide focus:border-neon-purple focus:outline-none transition"
+                        />
+                        <Button type="submit" variant="primary" fullWidth className="h-12 text-base font-bold shadow-lg bg-neon-blue text-black">
+                            Continue as Guest <ArrowRight size={18} />
+                        </Button>
+                    </form>
+
+                    <div className="relative py-6">
+                        <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/[0.06]"></div></div>
+                        <div className="relative flex justify-center text-xs"><span className="px-4 bg-[#12121b] text-gray-500 font-bold tracking-widest uppercase">Member Access</span></div>
+                    </div>
+
+                    <Button onClick={() => navigate('/')} variant="outline" fullWidth className="h-12 border-white/[0.08] text-gray-400 hover:text-white hover:bg-white/[0.03]">
+                        <LogIn size={18} /> Login / Register
                     </Button>
-                </form>
-
-                <div className="relative py-2">
-                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-800"></div></div>
-                    <div className="relative flex justify-center text-xs"><span className="px-4 bg-[#1a1a2e] text-gray-500 font-bold tracking-widest uppercase">Member Access</span></div>
                 </div>
-
-                <Button onClick={() => navigate('/')} variant="outline" className="w-full h-12 border-gray-700 hover:bg-gray-800 hover:text-white text-gray-400">
-                    <LogIn size={18} className="mr-2" /> Login / Register
-                </Button>
             </div>
         </div>
     );
 
     const renderMenu = () => (
-        <div className="space-y-8 animate-fade-in">
+        <div className="space-y-6 animate-fade-in">
             {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4 pb-6 border-b border-gray-800/50">
-                <div>
-                    <h2 className="text-3xl font-black text-white flex items-center gap-3">
-                        <Gamepad2 className="text-neon-purple" size={32} /> Multiplayer Arena
-                    </h2>
-                    <p className="text-gray-400 text-sm mt-1">Challenge friends in real-time battles.</p>
+            <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-neon-purple/10 border border-neon-purple/20 flex items-center justify-center text-neon-purple shadow-[0_0_30px_rgba(188,19,254,0.15)]">
+                    <Gamepad2 size={24} />
                 </div>
-                <div className="flex items-center gap-3 bg-black/30 px-5 py-2.5 rounded-full border border-gray-700/50 backdrop-blur-sm">
-                    <div className="w-2 h-2 rounded-full bg-neon-green animate-pulse"></div>
-                    <span className="text-sm font-bold text-white tracking-wide">{currentUsername}</span>
+                <div>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Multiplayer Arena</h1>
+                    <p className="text-sm text-gray-400 mt-0.5">Challenge friends in real-time battles.</p>
                 </div>
             </div>
-            
-            {/* Action Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* Create Room Card */}
-                <button 
-                    onClick={() => setView('create')} 
-                    disabled={isRoomActionPending || quizzesLoading || availableQuizzes.length === 0 || !isConnected}
-                    className="group relative h-64 rounded-3xl overflow-hidden text-left border border-white/5 bg-gray-900/40 hover:bg-gray-800/60 transition-all duration-300 hover:border-neon-blue/50 hover:shadow-[0_0_30px_rgba(0,243,255,0.1)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    <div className="absolute inset-0 bg-linear-to-br from-neon-blue/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    
-                    <div className="absolute top-6 left-6 bg-gray-800/80 p-4 rounded-2xl border border-white/10 text-neon-blue shadow-lg group-hover:scale-110 transition-transform duration-300">
-                        <PlusCircle size={32} />
-                    </div>
 
-                    <div className="absolute bottom-6 left-6 right-6">
-                        <h3 className="text-2xl font-black text-white mb-2 group-hover:text-neon-blue transition-colors">Create Room</h3>
-                        <p className="text-sm text-gray-400 font-medium leading-relaxed">Host a new game session. Select your quiz material and invite others to join via code.</p>
+            {/* Engagement Banner */}
+            <div className="relative overflow-hidden bg-[#12121b] p-5 rounded-2xl border border-white/[0.06]">
+                <div className="absolute top-0 right-0 w-40 h-40 bg-neon-purple/8 blur-[80px] rounded-full" />
+                <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-neon-purple/10 border border-neon-purple/20 flex items-center justify-center text-neon-purple">
+                            <Zap size={20} />
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold text-white">Ready to battle?</p>
+                            <p className="text-xs text-gray-500">Create a room or join a friend's game</p>
+                        </div>
                     </div>
-                    
-                    <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0">
-                        <ArrowRight className="text-gray-500" />
+                    <div className="flex items-center gap-2">
+                        <div className="flex -space-x-2">
+                            <div className="w-7 h-7 rounded-full bg-neon-blue/20 border-2 border-[#12121b] flex items-center justify-center text-[10px] font-bold text-neon-blue">A</div>
+                            <div className="w-7 h-7 rounded-full bg-neon-green/20 border-2 border-[#12121b] flex items-center justify-center text-[10px] font-bold text-neon-green">B</div>
+                            <div className="w-7 h-7 rounded-full bg-neon-purple/20 border-2 border-[#12121b] flex items-center justify-center text-[10px] font-bold text-neon-purple">C</div>
+                        </div>
+                        <span className="text-xs text-gray-500">playing now</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Action Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Create Room */}
+                <button
+                    onClick={() => setView('create')}
+                    disabled={isRoomActionPending || quizzesLoading || availableQuizzes.length === 0 || !isConnected}
+                    className="group relative text-left bg-[#12121b] border border-white/[0.06] rounded-2xl p-6 transition-all duration-300 hover:border-neon-blue/30 hover:shadow-[0_0_30px_rgba(0,243,255,0.08)] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                    <div className="absolute inset-0 bg-linear-to-br from-neon-blue/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl" />
+                    <div className="relative">
+                        <div className="w-12 h-12 rounded-2xl bg-neon-blue/10 border border-neon-blue/20 flex items-center justify-center text-neon-blue mb-4 group-hover:scale-110 transition-transform duration-300">
+                            <PlusCircle size={24} />
+                        </div>
+                        <h3 className="text-lg font-bold text-white mb-1 group-hover:text-neon-blue transition-colors">Create Room</h3>
+                        <p className="text-sm text-gray-400 leading-relaxed">Host a new game session. Select your quiz and invite others via code.</p>
+                        <div className="mt-4 flex items-center gap-1.5 text-xs font-medium text-gray-500 group-hover:text-neon-blue transition-colors">
+                            <span>Get started</span>
+                            <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                        </div>
                     </div>
                 </button>
-                
-                {/* Join Room Card */}
-                <button 
-                    onClick={() => setView('join')} 
+
+                {/* Join Room */}
+                <button
+                    onClick={() => setView('join')}
                     disabled={isRoomActionPending || !isConnected}
-                    className="group relative h-64 rounded-3xl overflow-hidden text-left border border-white/5 bg-gray-900/40 hover:bg-gray-800/60 transition-all duration-300 hover:border-neon-green/50 hover:shadow-[0_0_30px_rgba(57,255,20,0.1)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="group relative text-left bg-[#12121b] border border-white/[0.06] rounded-2xl p-6 transition-all duration-300 hover:border-neon-green/30 hover:shadow-[0_0_30px_rgba(57,255,20,0.08)] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                    <div className="absolute inset-0 bg-linear-to-br from-neon-green/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    
-                    <div className="absolute top-6 left-6 bg-gray-800/80 p-4 rounded-2xl border border-white/10 text-neon-green shadow-lg group-hover:scale-110 transition-transform duration-300">
-                        <LogIn size={32} />
-                    </div>
-
-                    <div className="absolute bottom-6 left-6 right-6">
-                        <h3 className="text-2xl font-black text-white mb-2 group-hover:text-neon-green transition-colors">Join Room</h3>
-                        <p className="text-sm text-gray-400 font-medium leading-relaxed">Enter an existing 4-digit room code to jump into a lobby instantly.</p>
-                    </div>
-
-                    <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0">
-                        <ArrowRight className="text-gray-500" />
+                    <div className="absolute inset-0 bg-linear-to-br from-neon-green/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl" />
+                    <div className="relative">
+                        <div className="w-12 h-12 rounded-2xl bg-neon-green/10 border border-neon-green/20 flex items-center justify-center text-neon-green mb-4 group-hover:scale-110 transition-transform duration-300">
+                            <LogIn size={24} />
+                        </div>
+                        <h3 className="text-lg font-bold text-white mb-1 group-hover:text-neon-green transition-colors">Join Room</h3>
+                        <p className="text-sm text-gray-400 leading-relaxed">Enter an existing 4-digit room code to jump into a lobby instantly.</p>
+                        <div className="mt-4 flex items-center gap-1.5 text-xs font-medium text-gray-500 group-hover:text-neon-green transition-colors">
+                            <span>Enter code</span>
+                            <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                        </div>
                     </div>
                 </button>
             </div>
 
             {!isConnected && (
-                <div className="flex items-center justify-center gap-2 text-red-500 bg-red-500/10 py-3 rounded-xl border border-red-500/20">
+                <div className="flex items-center justify-center gap-2 text-red-400 bg-red-500/10 py-3 rounded-xl border border-red-500/20">
                     <AlertCircle size={16} />
                     <span className="text-xs font-bold uppercase tracking-wide">Disconnected from Server</span>
                 </div>
@@ -486,92 +511,111 @@ export default function Multiplayer() {
     );
 
     const renderJoinRoom = () => (
-        <form onSubmit={handleJoinRoom} className="flex flex-col h-full justify-between animate-fade-in">
-            <div className="text-center space-y-2 mt-4">
-                <div className="inline-flex items-center justify-center p-4 bg-gray-800/50 rounded-2xl border border-gray-700/50 mb-4 shadow-xl">
-                    <KeyRound size={32} className="text-neon-green" />
-                </div>
-                <h2 className="text-3xl font-black text-white">Enter Access Code</h2>
-                <p className="text-gray-400 text-sm">Ask the host for the 4-character ID.</p>
-            </div>
-
-            <div className="flex-1 flex items-center justify-center py-8">
-                <div className="relative group w-full max-w-xs mx-auto">
-                    {/* Glow effect behind input */}
-                    <div className="absolute inset-0 bg-neon-green/20 blur-xl rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500"></div>
-                    
-                    <input 
-                        type="text" 
-                        placeholder="____" 
-                        value={roomCode} 
-                        onChange={e => setRoomCode(e.target.value.toUpperCase())} 
-                        maxLength={4} 
-                        className="relative w-full text-center text-5xl font-mono font-bold uppercase tracking-[0.5em] py-6 bg-black/60 border-2 border-gray-700 rounded-2xl text-white focus:border-neon-green focus:outline-none focus:bg-black/80 transition-all placeholder-gray-800 shadow-2xl"
-                    />
+        <form onSubmit={handleJoinRoom} className="space-y-8 animate-fade-in">
+            <div className="flex items-center gap-4">
+                <Button type="button" variant="ghost" size="icon" onClick={handleCancel} className="text-gray-400 hover:text-white hover:bg-white/5 border border-white/10">
+                    <ArrowLeft size={20} />
+                </Button>
+                <div className="flex items-start gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-neon-green/10 border border-neon-green/20 flex items-center justify-center text-neon-green shadow-[0_0_30px_rgba(57,255,20,0.12)]">
+                        <KeyRound size={24} />
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-bold text-white tracking-tight">Join a Game</h2>
+                        <p className="text-sm text-gray-400 mt-0.5">Enter the room code from your friend</p>
+                    </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-                <Button type="button" onClick={handleCancel} variant="outline" className="border-gray-700 text-gray-400 hover:text-white hover:bg-gray-800 h-14">
+            {/* Code Input */}
+            <div className="bg-[#12121b] p-6 rounded-2xl border border-white/[0.06]">
+                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block text-left mb-4">Room Code</label>
+                <div className="flex items-center justify-center py-4">
+                    <div className="relative group w-full max-w-xs mx-auto">
+                        <div className="absolute inset-0 bg-neon-green/10 blur-xl rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500" />
+                        <input
+                            type="text"
+                            placeholder="____"
+                            value={roomCode}
+                            onChange={e => setRoomCode(e.target.value.toUpperCase())}
+                            maxLength={4}
+                            autoFocus
+                            className="relative w-full text-center text-5xl font-mono font-bold uppercase tracking-[0.5em] py-6 bg-white/[0.03] border-2 border-white/[0.06] rounded-2xl text-white focus:border-neon-green focus:outline-none transition-all placeholder-gray-700"
+                        />
+                    </div>
+                </div>
+                <p className="text-xs text-gray-500 text-center mt-2">Ask the host for the 4-character code</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+                <Button type="button" onClick={handleCancel} variant="outline" className="border-white/[0.08] text-gray-400 hover:text-white hover:bg-white/[0.03] h-12">
                     Cancel
                 </Button>
-                    <Button type="submit" variant="primary" className="bg-neon-green hover:bg-[#39ff14] text-black font-bold h-14 shadow-[0_0_20px_rgba(57,255,20,0.2)]" disabled={isRoomActionPending || roomCode.length !== 4}>
-                    Join Lobby
+                <Button type="submit" variant="success" className="h-12 font-bold" disabled={isRoomActionPending || roomCode.length !== 4}>
+                    Join Game
                 </Button>
             </div>
         </form>
     );
 
     const renderCreateRoom = () => (
-        <form onSubmit={handleCreateRoom} className="flex flex-col h-full animate-fade-in">
-            <div className="text-center mb-8 mt-4">
-                <h2 className="text-3xl font-black text-white mb-2">Configure Lobby</h2>
-                <p className="text-gray-400 text-sm">Select the material for this session.</p>
+        <form onSubmit={handleCreateRoom} className="space-y-8 animate-fade-in">
+            <div className="flex items-center gap-4">
+                <Button type="button" variant="ghost" size="icon" onClick={handleCancel} className="text-gray-400 hover:text-white hover:bg-white/5 border border-white/10">
+                    <ArrowLeft size={20} />
+                </Button>
+                <div className="flex items-start gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-neon-blue/10 border border-neon-blue/20 flex items-center justify-center text-neon-blue shadow-[0_0_30px_rgba(0,243,255,0.12)]">
+                        <PlusCircle size={24} />
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-bold text-white tracking-tight">Create a Game</h2>
+                        <p className="text-sm text-gray-400 mt-0.5">Pick a quiz and invite your friends</p>
+                    </div>
+                </div>
             </div>
 
-            <div className="flex-1">
+            {/* Quiz Selection */}
+            <div className="bg-[#12121b] p-5 rounded-2xl border border-white/[0.06] space-y-4">
+                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider text-left block">Quiz Material</label>
                 {quizzesLoading ? (
-                    <div className="h-full flex items-center justify-center text-neon-blue gap-2">
-                        <Loader className="animate-spin" /> Loading Library...
+                    <div className="space-y-2">
+                        {[...Array(3)].map((_, i) => (
+                            <div key={i} className="h-14 bg-white/[0.04] rounded-xl animate-pulse"></div>
+                        ))}
                     </div>
                 ) : (
-                    <div className="space-y-4">
-                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-1">Select Quiz Material</label>
-                        <div className="relative group">
-                            <select 
-                                value={selectedQuizId || ''} 
-                                onChange={(e) => setSelectedQuizId(e.target.value)} 
-                                className="w-full bg-black/40 border border-gray-700 rounded-2xl p-5 text-white focus:border-neon-blue focus:ring-1 focus:ring-neon-blue outline-none cursor-pointer text-lg appearance-none shadow-inner transition-all font-medium"
-                            >
-                                {availableQuizzes.map(quiz => (
-                                    <option key={quiz.id} value={String(quiz.id)} className="bg-gray-900">
-                                        {quiz.title} • {quiz.difficulty}
-                                    </option>
-                                ))}
-                            </select>
-                            <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 group-hover:text-neon-blue transition-colors">
-                                <ArrowRight size={20} className="rotate-90" />
-                            </div>
-                        </div>
-                        
+                    <>
+                        <select
+                            value={selectedQuizId || ''}
+                            onChange={(e) => setSelectedQuizId(e.target.value)}
+                            className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-white focus:border-neon-blue outline-none cursor-pointer text-sm appearance-none transition font-medium"
+                        >
+                            {availableQuizzes.map(quiz => (
+                                <option key={quiz.id} value={String(quiz.id)} className="bg-[#1a1a2e]">
+                                    {quiz.title} • {quiz.difficulty}
+                                </option>
+                            ))}
+                        </select>
+
                         {selectedQuizId && (
-                            <div className="p-4 bg-neon-blue/10 border border-neon-blue/20 rounded-xl flex items-start gap-3">
+                            <div className="p-4 bg-neon-blue/5 border border-neon-blue/15 rounded-xl flex items-start gap-3">
                                 <AlertCircle size={18} className="text-neon-blue mt-0.5 shrink-0" />
-                                <p className="text-xs text-neon-blue/80 leading-relaxed">
-                                    The game will start once all players have joined the lobby. As the host, you control when the questions begin.
+                                <p className="text-xs text-neon-blue/70 leading-relaxed">
+                                    As the host, you control when the game starts. Share the room code with friends once the lobby is ready.
                                 </p>
                             </div>
                         )}
-                    </div>
+                    </>
                 )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mt-8">
-                <Button type="button" onClick={handleCancel} variant="outline" className="border-gray-700 text-gray-400 hover:text-white hover:bg-gray-800 h-14">
+            <div className="grid grid-cols-2 gap-3">
+                <Button type="button" onClick={handleCancel} variant="outline" className="border-white/[0.08] text-gray-400 hover:text-white hover:bg-white/[0.03] h-12">
                     Cancel
                 </Button>
-                <Button type="submit" variant="success" className="h-14 font-bold text-lg shadow-[0_0_20px_rgba(0,243,255,0.2)] bg-linear-to-r from-neon-blue to-neon-purple border-none text-white hover:opacity-90" disabled={isRoomActionPending}>
-                    Create
+                <Button type="submit" variant="primary" className="h-12 font-bold" disabled={isRoomActionPending}>
+                    Create Room
                 </Button>
             </div>
         </form>
@@ -584,86 +628,122 @@ export default function Multiplayer() {
 
         return (
             <div className="space-y-6 animate-fade-in">
-                <div className="flex flex-col items-center border-b border-gray-800 pb-6">
-                    <span className="text-xs font-bold text-neon-blue uppercase tracking-widest mb-2 bg-neon-blue/10 px-3 py-1 rounded-full border border-neon-blue/20">Lobby Active</span>
-                    <h2 className="text-3xl md:text-4xl font-black text-white mt-3 text-center">{lobbyData.quizTitle}</h2>
+                <div className="flex items-start gap-4">
+                    <Button variant="ghost" size="icon" onClick={leaveRoom} className="text-gray-400 hover:text-white hover:bg-white/5 border border-white/10 shrink-0 mt-1">
+                        <ArrowLeft size={20} />
+                    </Button>
+                    <div>
+                        <span className="text-[10px] font-bold text-neon-blue uppercase tracking-widest bg-neon-blue/10 px-2.5 py-1 rounded-md border border-neon-blue/20 inline-block mb-2">Lobby Active</span>
+                        <h2 className="text-xl sm:text-2xl font-bold text-white leading-tight">{lobbyData.quizTitle}</h2>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Players List */}
-                    <div className="bg-black/30 p-5 rounded-3xl border border-white/5 flex flex-col h-[380px]">
-                        <div className="flex justify-between items-center mb-4 pb-2 border-b border-white/5">
+                    {/* Players */}
+                    <div className="bg-[#12121b] p-5 rounded-2xl border border-white/[0.06] flex flex-col">
+                        <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/[0.06]">
                             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
                                 <Users size={16} /> Roster ({players.length})
                             </h3>
                             {lobbyData.host === currentUsername && (
-                                <span className="text-[10px] font-bold bg-neon-purple/20 text-neon-purple px-2 py-1 rounded border border-neon-purple/30">HOST</span>
+                                <span className="text-[10px] font-bold bg-neon-purple/10 text-neon-purple px-2 py-0.5 rounded border border-neon-purple/20">HOST</span>
                             )}
                         </div>
-                        <div className="space-y-2 overflow-y-auto pr-2 custom-scrollbar flex-1">
+                        <div className="space-y-2 overflow-y-auto flex-1">
                             {players.map(player => (
-                                <div key={player.username} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
+                                <div key={player.username} className="flex justify-between items-center p-3 bg-white/[0.02] rounded-xl border border-white/[0.04] hover:border-white/[0.08] transition-colors">
                                     <div className="flex items-center gap-3">
                                         <div className={`w-2.5 h-2.5 rounded-full ${player.isHost ? 'bg-neon-purple shadow-[0_0_10px_#bc13fe]' : 'bg-neon-green shadow-[0_0_8px_#39ff14]'}`}></div>
-                                        <span className="text-white font-bold tracking-wide">{player.username}</span>
+                                        <span className="text-white font-bold tracking-wide text-sm">{player.username}</span>
                                     </div>
-                                    {player.username === currentUsername && <span className="text-[10px] bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded font-mono">YOU</span>}
+                                    {player.username === currentUsername && <span className="text-[10px] bg-white/[0.06] text-gray-400 px-1.5 py-0.5 rounded font-mono">YOU</span>}
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    {/* Invite Section */}
-                    <div className="bg-black/30 p-5 rounded-3xl border border-white/5 flex flex-col items-center h-[380px]">
-                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 w-full justify-center border-b border-white/5 pb-4 shrink-0">
+                    {/* Invite */}
+                    <div className="bg-[#12121b] p-5 rounded-2xl border border-white/[0.06] flex flex-col items-center">
+                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 w-full justify-center border-b border-white/[0.06] pb-4 mb-4">
                             <Share2 size={16} /> Scan to Join
                         </h3>
-                        
+
                         <div className="flex-1 flex items-center justify-center py-2">
                             <div className="p-4 bg-white rounded-2xl shadow-xl">
                                 <QRCodeSVG value={inviteLink} size={140} level={"H"} />
                             </div>
                         </div>
-                        
-                        <div className="w-full space-y-3 shrink-0">
-                            <div className="flex items-center gap-2 bg-gray-900 p-1.5 pr-3 rounded-xl border border-gray-700 group hover:border-neon-blue transition-colors">
-                                <div className="bg-gray-800 px-4 py-2 rounded-lg text-neon-green font-mono font-bold text-2xl tracking-widest border border-gray-700 shadow-inner">
+
+                        <div className="w-full space-y-3 mt-4">
+                            <div className="flex items-center gap-2 bg-white/[0.03] p-1.5 pr-3 rounded-xl border border-white/[0.06] group hover:border-neon-blue/30 transition-colors">
+                                <div className="bg-white/[0.05] px-4 py-2 rounded-lg text-neon-green font-mono font-bold text-2xl tracking-widest border border-white/[0.06]">
                                     {lobbyData.roomCode}
                                 </div>
                                 <div className="flex-1 text-left pl-2">
                                     <div className="text-[10px] text-gray-500 font-bold uppercase">Room Code</div>
                                 </div>
-                                <button onClick={() => copyToClipboard(lobbyData.roomCode, 'code')} className="text-gray-400 hover:text-white p-2 hover:bg-white/10 rounded-lg transition">
-                                    {copiedField === 'code' ? <CheckCircle size={20} className="text-neon-green" /> : <Copy size={20} />}
-                                </button>
+                                <Button onClick={() => copyToClipboard(lobbyData.roomCode, 'code')} variant="ghost" size="icon" className="text-gray-400 hover:text-white hover:bg-white/10">
+                                    {copiedField === 'code' ? <CheckCircle size={18} className="text-neon-green" /> : <Copy size={18} />}
+                                </Button>
                             </div>
-                            
-                            <div className="flex items-center gap-2 bg-gray-900 p-2 rounded-xl border border-gray-700 cursor-pointer group hover:border-neon-blue transition-colors" onClick={() => copyToClipboard(inviteLink, 'link')}>
-                                <div className="bg-gray-800 p-2 rounded-lg text-neon-blue border border-gray-700"><LinkIcon size={18} /></div>
+
+                            <div className="flex items-center gap-2 bg-white/[0.03] p-2 rounded-xl border border-white/[0.06] cursor-pointer group hover:border-neon-blue/30 transition-colors" onClick={() => copyToClipboard(inviteLink, 'link')}>
+                                <div className="bg-white/[0.05] p-2 rounded-lg text-neon-blue border border-white/[0.06]"><LinkIcon size={16} /></div>
                                 <div className="flex-1 text-left overflow-hidden">
                                     <div className="text-[10px] text-gray-500 font-bold uppercase">Direct Link</div>
                                     <div className="text-xs text-gray-400 truncate w-full opacity-60">{inviteLink}</div>
                                 </div>
-                                <button className="text-gray-400 hover:text-white p-2 hover:bg-white/10 rounded-lg transition">
-                                    {copiedField === 'link' ? <CheckCircle size={20} className="text-neon-green" /> : <Copy size={20} />}
-                                </button>
+                                <Button variant="ghost" size="icon" className="text-gray-400 hover:text-white hover:bg-white/10">
+                                    {copiedField === 'link' ? <CheckCircle size={18} className="text-neon-green" /> : <Copy size={18} />}
+                                </Button>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div className="pt-6 border-t border-gray-800 flex items-center justify-between gap-4">
-                    <Button type="button" onClick={leaveRoom} variant="ghost" className="text-red-500 hover:bg-red-500/10 px-6">
+                {/* Chat */}
+                <div className="bg-[#12121b] rounded-2xl border border-white/[0.06] flex flex-col h-[300px]">
+                    <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 p-4 border-b border-white/[0.06]">
+                        <MessageCircle size={16} /> Lobby Chat
+                    </h3>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                        {chatMessages.length === 0 ? (
+                            <p className="text-gray-600 text-sm text-center mt-8">No messages yet. Say hi!</p>
+                        ) : (
+                            chatMessages.map((msg, i) => (
+                                <div key={i} className="text-sm">
+                                    <span className={`font-bold ${msg.username === currentUsername ? 'text-neon-blue' : 'text-neon-purple'}`}>
+                                        {msg.username}:
+                                    </span>
+                                    <span className="text-gray-300 ml-2">{msg.message}</span>
+                                </div>
+                            ))
+                        )}
+                        <div ref={chatEndRef} />
+                    </div>
+                    <form onSubmit={sendChat} className="p-3 border-t border-white/[0.06] flex gap-2">
+                        <input
+                            value={chatInput}
+                            onChange={(e) => setChatInput(e.target.value)}
+                            placeholder="Type a message..."
+                            className="flex-1 bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-2.5 text-white text-sm focus:border-neon-blue outline-none transition"
+                        />
+                        <Button type="submit" variant="primary" size="sm">Send</Button>
+                    </form>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-between gap-4 pt-2">
+                    <Button type="button" onClick={leaveRoom} variant="ghost" className="text-red-400 hover:bg-red-500/10 border border-red-500/20 px-5">
                         Leave Room
                     </Button>
-                    
                     {lobbyData.host === currentUsername ? (
-                        <Button onClick={handleStartGame} variant="success" className="px-10 h-14 text-lg font-bold shadow-[0_0_20px_rgba(57,255,20,0.3)] bg-neon-green text-black hover:bg-[#39ff14]">
+                        <Button onClick={handleStartGame} variant="success" className="px-8 h-12 text-base font-bold shadow-[0_0_20px_rgba(57,255,20,0.2)]">
                             Start Game <ArrowRight className="ml-2" />
                         </Button>
                     ) : (
-                        <div className="flex items-center gap-3 px-6 py-3 bg-gray-900 rounded-xl border border-gray-700/50">
-                            <Loader className="animate-spin text-neon-blue" size={20} />
+                        <div className="flex items-center gap-2 px-5 py-3 bg-white/[0.03] rounded-xl border border-white/[0.06]">
+                            <Loader className="animate-spin text-neon-blue" size={18} />
                             <span className="text-sm font-bold text-gray-300">Waiting for Host...</span>
                         </div>
                     )}
@@ -671,9 +751,6 @@ export default function Multiplayer() {
             </div>
         );
     };
-
-    // ... (Keep Countdown, Game, and Results as they are generally okay, or apply similar styling if desired. 
-    // For now, I will focus on the requested screens: Menu, Join, Loading)
 
     const renderCountdown = () => {
         if (!lobbyData) return renderMenu();
@@ -688,13 +765,13 @@ export default function Multiplayer() {
                 <h3 className="text-gray-500 font-bold uppercase tracking-[0.5em] mb-12 animate-pulse">Get Ready</h3>
                 <div className="relative flex items-center justify-center">
                     <div className={`absolute w-64 h-64 rounded-full blur-3xl opacity-20 transition-colors duration-300 ${colorClass.replace('text-', 'bg-')}`}></div>
-                    <span className={`text-[12rem] font-mono font-black leading-none transition-all duration-300 transform scale-100 ${colorClass} drop-shadow-2xl`}>
+                    <span className={`text-[10rem] sm:text-[12rem] font-mono font-black leading-none transition-all duration-300 ${colorClass} drop-shadow-2xl`}>
                         {countdown > 0 ? countdown : 'GO!'}
                     </span>
                 </div>
                 <div className="mt-16 text-center space-y-3">
-                    <span className="text-neon-blue text-sm font-bold uppercase tracking-wider bg-neon-blue/10 px-3 py-1 rounded-full">Next Up</span>
-                    <h2 className="text-2xl md:text-3xl font-black text-white max-w-lg leading-tight">{lobbyData.quizTitle}</h2>
+                    <span className="text-neon-blue text-xs font-bold uppercase tracking-wider bg-neon-blue/10 px-3 py-1 rounded-md border border-neon-blue/20">Next Up</span>
+                    <h2 className="text-xl sm:text-2xl font-bold text-white max-w-lg leading-tight">{lobbyData.quizTitle}</h2>
                 </div>
             </div>
         );
@@ -705,20 +782,20 @@ export default function Multiplayer() {
         const q = gameQuestions[currentQIndex];
         const player = lobbyData.players.find(p => p.username === currentUsername);
         const playerAnswer = playerAnswerLocal;
-        
+
         return (
             <div className="space-y-6 animate-fade-in">
-                <div className="flex justify-between items-center pb-4 border-b border-gray-800">
-                    <h3 className="text-xl font-mono text-gray-400">Q<span className="text-white font-bold">{currentQIndex + 1}</span>/{gameQuestions.length}</h3>
+                <div className="flex justify-between items-center pb-4 border-b border-white/[0.06]">
+                    <h3 className="text-lg font-mono text-gray-400">Q<span className="text-white font-bold">{currentQIndex + 1}</span>/{gameQuestions.length}</h3>
                     <div className="flex items-center gap-4 text-white">
-                        <span className={`font-bold flex items-center gap-1.5 leading-none ${timeLeft <= 3 ? 'text-red-500 animate-pulse' : 'text-neon-blue'}`}>
-                            <Clock size={18} className="mb-px" /> {timeLeft > 0 ? timeLeft : 0}s
+                        <span className={`font-bold flex items-center gap-1.5 text-sm ${timeLeft <= 3 ? 'text-red-500 animate-pulse' : 'text-neon-blue'}`}>
+                            <Clock size={16} /> {timeLeft > 0 ? timeLeft : 0}s
                         </span>
-                        <span className="text-neon-green font-bold flex items-center gap-1"><Zap size={18} /> {player?.score || 0}</span>
+                        <span className="text-neon-green font-bold flex items-center gap-1 text-sm"><Zap size={16} /> {player?.score || 0}</span>
                     </div>
                 </div>
-                <h2 className="text-2xl font-bold text-white leading-relaxed">{q.question}</h2>
-                <div className="grid gap-4">
+                <h2 className="text-xl sm:text-2xl font-bold text-white leading-relaxed">{q.question}</h2>
+                <div className="grid gap-3">
                     {q.options.map((opt, idx) => {
                         let buttonClass = '';
                         let icon = null;
@@ -744,7 +821,7 @@ export default function Multiplayer() {
                     })}
                 </div>
                 {showAnswerKey && (
-                    <div className="mt-8 pt-4 border-t border-gray-800 animate-fade-in">
+                    <div className="mt-6 pt-4 border-t border-white/[0.06] animate-fade-in">
                         <div className="flex items-center justify-between text-lg font-bold">
                             <span className="flex items-center gap-2 text-neon-blue"><AlertCircle size={18} /> Explanation</span>
                             <span className={`text-sm ${player?.lastScore > 0 ? 'text-neon-green' : 'text-red-500'}`}>Score: {player?.lastScore > 0 ? `+${player.lastScore}` : 0}</span>
@@ -752,8 +829,8 @@ export default function Multiplayer() {
                         <p className="text-gray-400 text-sm mt-2 leading-relaxed">{qAnswer.explanation}</p>
                     </div>
                 )}
-                <div className="pt-4 text-center">
-                    <p className="text-sm text-gray-500">{isAnswered && !showAnswerKey ? 'Waiting for results...' : showAnswerKey ? `Next question in ${ANSWER_REVEAL_DELAY_MS / 1000} seconds.` : 'Answer quickly!'}</p>
+                <div className="pt-2 text-center">
+                    <p className="text-sm text-gray-500">{isAnswered && !showAnswerKey ? 'Waiting for results...' : showAnswerKey ? `Next question in ${revealCountdown}s` : 'Answer quickly!'}</p>
                 </div>
             </div>
         );
@@ -761,78 +838,207 @@ export default function Multiplayer() {
 
     const renderResults = () => {
         if (!playerRanking || !lobbyData) return renderMenu();
+        const totalQuestions = gameQuestions?.length || 0;
+        const isWinner = playerRanking[0]?.username === currentUsername;
+        const myRank = playerRanking.findIndex(p => p.username === currentUsername) + 1;
+        const myScore = playerRanking.find(p => p.username === currentUsername)?.score || 0;
+        const podium = playerRanking.slice(0, 3);
+
         return (
             <div className="space-y-6 text-center relative animate-fade-in">
-                 <div className="fixed inset-0 z-50 pointer-events-none">
-                     <Confetti width={windowSize.width} height={windowSize.height} recycle={false} numberOfPieces={800} gravity={0.2} />
-                 </div>
-                <Trophy size={60} className="text-yellow-400 mx-auto" />
-                <h2 className="text-4xl font-black text-white">Final Ranking</h2>
-                <p className="text-gray-400">Quiz: {lobbyData.quizTitle}</p>
-                <div className="bg-gray-900 p-4 rounded-2xl border border-gray-700 space-y-3">
-                    {playerRanking.map((p, index) => (
-                        <div key={p.username} className={`p-3 rounded-lg flex justify-between items-center font-bold ${
-                            index === 0 ? 'bg-neon-green/20 border-neon-green text-neon-green' : 
-                            p.username === currentUsername ? 'bg-neon-blue/20 border-neon-blue text-white' : 
-                            'bg-gray-800 text-gray-300'
-                        }`}>
-                            <span className="w-1/12">{index + 1}</span>
-                            <span className="w-5/12 text-left">{p.username}</span>
-                            <span className="w-6/12 text-right">{p.score} Points</span>
-                        </div>
-                    ))}
+                <div className="fixed inset-0 z-50 pointer-events-none">
+                    <Confetti width={windowSize.width} height={windowSize.height} recycle={false} numberOfPieces={isWinner ? 1200 : 400} gravity={0.15} />
                 </div>
-                <Button onClick={leaveRoom} variant="primary" className="w-full justify-center">Return to Menu</Button>
+
+                <div className="w-16 h-16 rounded-2xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center text-yellow-400 mx-auto shadow-[0_0_30px_rgba(250,204,21,0.15)]">
+                    <Trophy size={32} />
+                </div>
+
+                <div>
+                    <h2 className="text-3xl font-bold text-white">
+                        {isWinner ? 'You Won!' : `You placed #${myRank}`}
+                    </h2>
+                    <p className="text-gray-400 text-sm mt-1">{lobbyData.quizTitle}</p>
+                </div>
+
+                {/* Your Stats Card */}
+                <div className={`p-4 rounded-2xl border ${isWinner ? 'bg-yellow-400/5 border-yellow-400/20' : 'bg-neon-blue/5 border-neon-blue/20'}`}>
+                    <div className="flex items-center justify-between">
+                        <div className="text-left">
+                            <p className="text-xs text-gray-500 uppercase tracking-wider">Your Result</p>
+                            <p className="text-2xl font-bold text-white">{myScore} pts</p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-xs text-gray-500 uppercase tracking-wider">Score</p>
+                            <p className="text-lg font-bold text-neon-blue">{myRank}/{playerRanking.length}</p>
+                        </div>
+                    </div>
+                    {totalQuestions > 0 && (
+                        <div className="mt-3 pt-3 border-t border-white/[0.06] flex justify-between text-sm">
+                            <span className="text-gray-500">Questions</span>
+                            <span className="text-white font-medium">{totalQuestions}</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Podium */}
+                {podium.length >= 2 && (
+                    <div className="flex items-end justify-center gap-3 pt-2">
+                        {/* 2nd Place */}
+                        <div className="flex flex-col items-center animate-slide-in-right" style={{ animationDelay: '0.1s' }}>
+                            <div className="w-10 h-10 rounded-full bg-gray-400/10 border-2 border-gray-400/30 flex items-center justify-center text-gray-400 text-sm font-bold mb-2">
+                                {podium[1]?.username?.charAt(0).toUpperCase()}
+                            </div>
+                            <p className="text-xs text-gray-400 font-medium truncate max-w-[80px]">{podium[1]?.username}</p>
+                            <p className="text-xs text-gray-500 mb-1">{podium[1]?.score} pts</p>
+                            <div className="w-20 h-20 bg-gray-400/5 border border-gray-400/15 rounded-t-xl flex items-center justify-center">
+                                <span className="text-2xl font-bold text-gray-400">2</span>
+                            </div>
+                        </div>
+                        {/* 1st Place */}
+                        <div className="flex flex-col items-center animate-slide-in-right" style={{ animationDelay: '0s' }}>
+                            <div className="w-12 h-12 rounded-full bg-yellow-400/10 border-2 border-yellow-400/30 flex items-center justify-center text-yellow-400 text-lg font-bold mb-2 shadow-[0_0_20px_rgba(250,204,21,0.15)]">
+                                {podium[0]?.username?.charAt(0).toUpperCase()}
+                            </div>
+                            <p className="text-xs text-yellow-400 font-bold truncate max-w-[80px]">{podium[0]?.username}</p>
+                            <p className="text-xs text-yellow-400/70 mb-1">{podium[0]?.score} pts</p>
+                            <div className="w-24 h-28 bg-yellow-400/5 border border-yellow-400/15 rounded-t-xl flex items-center justify-center">
+                                <span className="text-3xl font-bold text-yellow-400">1</span>
+                            </div>
+                        </div>
+                        {/* 3rd Place */}
+                        {podium[2] && (
+                            <div className="flex flex-col items-center animate-slide-in-right" style={{ animationDelay: '0.2s' }}>
+                                <div className="w-10 h-10 rounded-full bg-orange-400/10 border-2 border-orange-400/30 flex items-center justify-center text-orange-400 text-sm font-bold mb-2">
+                                    {podium[2]?.username?.charAt(0).toUpperCase()}
+                                </div>
+                                <p className="text-xs text-orange-400 font-medium truncate max-w-[80px]">{podium[2]?.username}</p>
+                                <p className="text-xs text-orange-400/70 mb-1">{podium[2]?.score} pts</p>
+                                <div className="w-20 h-16 bg-orange-400/5 border border-orange-400/15 rounded-t-xl flex items-center justify-center">
+                                    <span className="text-2xl font-bold text-orange-400">3</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Full Rankings */}
+                <div className="bg-[#12121b] p-4 rounded-2xl border border-white/[0.06] space-y-2">
+                    <p className="text-xs text-gray-500 uppercase tracking-wider text-left mb-3">Full Rankings</p>
+                    {playerRanking.map((p, index) => {
+                        const medals = ['bg-yellow-400/10 border-yellow-400/20 text-yellow-400', 'bg-gray-400/10 border-gray-400/20 text-gray-400', 'bg-orange-400/10 border-orange-400/20 text-orange-400'];
+                        const isMe = p.username === currentUsername;
+                        return (
+                            <div key={p.username} className={`p-3 rounded-xl flex justify-between items-center font-bold text-sm border ${
+                                isMe ? 'bg-neon-blue/10 border-neon-blue/20 text-white' :
+                                index < 3 ? medals[index] :
+                                'bg-white/[0.02] border-white/[0.06] text-gray-300'
+                            }`}>
+                                <div className="flex items-center gap-3">
+                                    <span className="w-6 text-center text-xs opacity-60">{index + 1}</span>
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border ${
+                                        index === 0 ? 'bg-yellow-400/10 border-yellow-400/20 text-yellow-400' :
+                                        index === 1 ? 'bg-gray-400/10 border-gray-400/20 text-gray-400' :
+                                        index === 2 ? 'bg-orange-400/10 border-orange-400/20 text-orange-400' :
+                                        'bg-white/[0.04] border-white/[0.08] text-gray-400'
+                                    }`}>
+                                        {p.username?.charAt(0).toUpperCase()}
+                                    </div>
+                                    <span>{p.username}{isMe && <span className="text-neon-blue ml-1 text-xs">(you)</span>}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xs text-gray-500">+{p.lastScore || 0}</span>
+                                    <span className="w-16 text-right">{p.score} pts</span>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Question Review */}
+                {questionResults.length > 0 && (
+                    <div className="bg-[#12121b] p-4 rounded-2xl border border-white/[0.06] space-y-3">
+                        <p className="text-xs text-gray-500 uppercase tracking-wider text-left mb-3">Question Review</p>
+                        {questionResults.map((r, i) => (
+                            <div key={i} className={`p-4 rounded-xl border ${r.isCorrect ? 'bg-neon-green/5 border-neon-green/15' : 'bg-red-500/5 border-red-500/15'}`}>
+                                <div className="flex items-start justify-between gap-3 mb-2">
+                                    <p className="text-sm font-bold text-white text-left leading-relaxed">Q{i + 1}. {r.question}</p>
+                                    <span className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded-full ${r.isCorrect ? 'bg-neon-green/15 text-neon-green' : 'bg-red-500/15 text-red-400'}`}>
+                                        {r.isCorrect ? 'Correct' : 'Wrong'}
+                                    </span>
+                                </div>
+                                <div className="space-y-1 mb-2">
+                                    {r.options.map((opt, oi) => {
+                                        const isCorrect = opt === r.correctAnswer;
+                                        const isPlayer = opt === r.playerAnswer;
+                                        return (
+                                            <div key={oi} className={`text-xs px-3 py-1.5 rounded-lg border ${
+                                                isCorrect ? 'bg-neon-green/10 border-neon-green/20 text-neon-green' :
+                                                isPlayer && !isCorrect ? 'bg-red-500/10 border-red-500/20 text-red-400' :
+                                                'bg-white/[0.02] border-white/[0.04] text-gray-400'
+                                            }`}>
+                                                {isCorrect && '✓ '}{isPlayer && !isCorrect && '✗ '}{opt}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                {r.explanation && (
+                                    <p className="text-xs text-gray-500 leading-relaxed text-left">{r.explanation}</p>
+                                )}
+                                <div className="mt-2 text-right">
+                                    <span className={`text-xs font-bold ${r.points > 0 ? 'text-neon-green' : 'text-gray-500'}`}>+{r.points} pts</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                <div className="flex gap-3">
+                    <Button onClick={leaveRoom} variant="outline" fullWidth className="h-12 font-bold border-white/[0.08] text-gray-400 hover:text-white hover:bg-white/[0.03]">Return to Menu</Button>
+                </div>
             </div>
         );
     };
-    
-    // UPDATED: Loading screen
+
     const renderLoading = () => (
-        <div className="text-center text-neon-blue flex flex-col items-center justify-center space-y-6 h-80 animate-fade-in">
-            <div className="relative">
-                <div className="absolute inset-0 bg-neon-blue/20 blur-xl rounded-full"></div>
-                <Loader size={64} className="animate-spin relative z-10" />
+        <div className="text-center flex flex-col items-center justify-center space-y-6 h-80 animate-fade-in">
+            <div className="w-16 h-16 bg-neon-blue/10 rounded-2xl flex items-center justify-center animate-pulse">
+                <div className="w-8 h-8 bg-neon-blue/20 rounded-lg"></div>
             </div>
             <div>
-                <p className="text-2xl font-black text-white tracking-wide">{isRoomActionPending ? "Establishing Connection..." : "Syncing..."}</p>
-                <p className="text-sm text-gray-500 mt-2 font-medium">Securing channel to game server.</p>
+                <p className="text-xl font-bold text-white">{isRoomActionPending ? "Establishing Connection..." : "Syncing..."}</p>
+                <p className="text-sm text-gray-500 mt-1">Securing channel to game server.</p>
             </div>
-            <Button 
-                type="button" 
-                onClick={handleCancel} 
-                variant="outline" 
-                className="mt-4 border-gray-700 text-gray-400 hover:text-white hover:bg-gray-800 w-auto px-8 rounded-full"
-            >
+            <Button type="button" onClick={handleCancel} variant="outline" className="mt-4 border-white/[0.08] text-gray-400 hover:text-white hover:bg-white/[0.03] px-8">
                 Cancel Request
             </Button>
         </div>
     );
 
     const renderContent = () => {
-        if (authLoading) return renderLoading(); 
-
+        if (authLoading) return renderLoading();
         switch (view) {
             case 'guest_entry': return renderGuestEntry();
             case 'create': return renderCreateRoom();
             case 'join': return renderJoinRoom();
             case 'lobby': return renderLobby();
-            case 'countdown': return renderCountdown(); 
-            case 'game': return renderGame(); 
+            case 'countdown': return renderCountdown();
+            case 'game': return renderGame();
             case 'results': return renderResults();
             case 'loading': return renderLoading();
             case 'menu': default: return renderMenu();
         }
     };
 
+    // Guest entry has its own full-page layout
+    if (view === 'guest_entry') return renderGuestEntry();
+
     return (
-        <div className="min-h-screen flex items-center justify-center bg-dark-bg p-4 md:p-8 animate-fade-in">
-            {/* Main Glassmorphic Container */}
-            <div className="bg-dark-surface/80 backdrop-blur-xl p-8 rounded-3xl border border-white/10 w-full max-w-4xl shadow-2xl relative overflow-hidden">
-                
-                {/* Decorative Top Gradient Line */}
-                <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-neon-blue via-neon-purple to-neon-green opacity-50"></div>
-                
+        <div className="bg-[#0b0b12] min-h-[calc(100vh-4rem)] relative">
+            <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-[500px] h-[250px] bg-neon-purple/10 blur-[100px] rounded-full" />
+            </div>
+            <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-3 pb-6 sm:pt-6 sm:pb-10">
                 {renderContent()}
             </div>
         </div>
