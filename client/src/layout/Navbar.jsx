@@ -103,8 +103,12 @@ export default function Navbar({ onOpenLogout }) {
                   to="/profile"
                   className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] transition"
                 >
-                  <div className="w-7 h-7 rounded-lg bg-neon-blue/10 border border-neon-blue/20 flex items-center justify-center text-neon-blue">
-                    <User size={14} />
+                  <div className="w-7 h-7 rounded-lg border border-white/[0.08] bg-[#12121b] flex items-center justify-center overflow-hidden">
+                    {user.avatar_url ? (
+                      <img src={user.avatar_url} alt={user.username} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-[10px] font-bold text-white">{user.username?.charAt(0).toUpperCase()}</span>
+                    )}
                   </div>
                   <span className="max-w-[100px] truncate">{user.username}</span>
                 </Link>
@@ -176,8 +180,12 @@ export default function Navbar({ onOpenLogout }) {
               </div>
               {user && (
                 <Link to="/profile" onClick={() => setIsOpen(false)} className="mt-4 flex items-center gap-3 p-3 bg-white/[0.03] rounded-xl border border-white/[0.06] hover:bg-white/[0.05] transition">
-                  <div className="w-10 h-10 rounded-xl bg-neon-blue/10 border border-neon-blue/20 flex items-center justify-center text-neon-blue">
-                    <User size={20} />
+                  <div className="w-10 h-10 rounded-xl border border-white/[0.08] bg-[#12121b] flex items-center justify-center overflow-hidden">
+                    {user.avatar_url ? (
+                      <img src={user.avatar_url} alt={user.username} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-sm font-bold text-white">{user.username?.charAt(0).toUpperCase()}</span>
+                    )}
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-white truncate">{user.username}</p>
