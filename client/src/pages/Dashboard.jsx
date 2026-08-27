@@ -152,6 +152,7 @@ export default function Dashboard() {
   if (authLoading) return <div className="min-h-screen flex items-center justify-center text-white">Loading...</div>;
   if (!user) return null;
   const level = Math.floor((user.xp || 0) / 100) + 1;
+  const xpProgress = ((user.xp || 0) % 100);
 
   return (
     <>
@@ -180,96 +181,185 @@ export default function Dashboard() {
 
           {/* Header */}
           <div className="bg-[#12121b] rounded-2xl border border-white/[0.06] overflow-hidden">
-            {/* Mobile: stacked layout */}
-            <div className="sm:hidden">
-              {/* Row 1: Avatar + Name + Hearts */}
-              <div className="flex items-center gap-3 p-4 pb-3">
-                <div className="w-10 h-10 rounded-xl bg-neon-blue/10 border border-neon-blue/20 flex items-center justify-center text-neon-blue shrink-0">
-                  <BookOpen size={18} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h1 className="text-sm font-bold text-white leading-tight">
-                    Welcome, <span className="text-neon-blue">{user.username}</span>
-                  </h1>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <div className="flex items-center gap-0.5">
-                    {[...Array(3)].map((_, i) => (
-                      <Heart key={i} size={14} className={i < user.hearts ? 'text-red-500 fill-red-500' : 'text-gray-700'} />
-                    ))}
-                    {user.hearts < 3 && timeUntilRegen && (
-                      <span className="text-[9px] text-neon-blue font-mono font-bold animate-pulse ml-0.5">{formatTime(timeUntilRegen)}</span>
-                    )}
-                    {user.hearts >= 3 && (
-                      <span className="text-[9px] text-gray-500 font-bold uppercase ml-0.5">Full</span>
+            {/* Mobile */}
+            <div className="sm:hidden p-4">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="relative shrink-0">
+                  <div className="w-14 h-14 rounded-2xl border border-white/[0.08] bg-[#0b0b12] flex items-center justify-center overflow-hidden">
+                    {user.avatar_url ? (
+                      <img src={user.avatar_url} alt={user.username} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-xl font-bold text-white">{user.username?.charAt(0).toUpperCase()}</span>
                     )}
                   </div>
-                  <button onClick={() => setShowStore(true)} className="w-5 h-5 rounded-full bg-neon-blue/10 border border-neon-blue/20 flex items-center justify-center text-neon-blue hover:bg-neon-blue/20 transition">
+                  <div className="absolute -bottom-1 -right-1 min-w-[18px] h-[18px] px-1 bg-neon-green rounded-full border-2 border-[#12121b] flex items-center justify-center">
+                    <span className="text-[7px] font-black text-black">{level}</span>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] text-gray-500 font-medium">Welcome back,</p>
+                  <h1 className="text-lg font-bold text-white truncate leading-tight">{user.username}</h1>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {[...Array(3)].map((_, i) => (
+                    <Heart key={i} size={16} className={i < user.hearts ? 'text-red-500 fill-red-500' : 'text-gray-700'} />
+                  ))}
+                  <button onClick={() => setShowStore(true)} className="ml-1 w-6 h-6 rounded-full bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/[0.08] transition">
                     <Plus size={12} />
                   </button>
                 </div>
               </div>
-              {/* Row 2: Level + XP + Streak */}
-              <div className="px-4 pb-3">
-                <div className="flex items-center gap-3 text-[11px]">
-                  <span className="text-gray-400 font-medium">Lv.{level}</span>
-                  <span className="text-gray-700">·</span>
-                  <span className="text-neon-blue font-semibold">{user.xp || 0} XP</span>
-                  {user.login_streak > 0 && (
-                    <>
-                      <span className="text-gray-700">·</span>
-                      <span className="text-orange-400 font-semibold">🔥{user.login_streak}</span>
-                    </>
-                  )}
+
+              {/* Stats row */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-white/[0.03] border border-white/[0.04] rounded-xl p-3 text-center">
+                  <p className="text-xl font-bold text-neon-blue">{user.xp || 0}</p>
+                  <p className="text-[9px] text-gray-500 uppercase tracking-wider mt-0.5">XP</p>
+                </div>
+                <div className="bg-white/[0.03] border border-white/[0.04] rounded-xl p-3 text-center">
+                  <p className="text-xl font-bold text-neon-purple">{level}</p>
+                  <p className="text-[9px] text-gray-500 uppercase tracking-wider mt-0.5">Level</p>
+                </div>
+                <div className="bg-white/[0.03] border border-white/[0.04] rounded-xl p-3 text-center">
+                  <p className="text-xl font-bold text-neon-green">{quizzes.length || 0}</p>
+                  <p className="text-[9px] text-gray-500 uppercase tracking-wider mt-0.5">Quizzes</p>
                 </div>
               </div>
+
+              {/* Progress */}
+              <div className="mt-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] text-gray-500">Level {level} → {level + 1}</span>
+                  <span className="text-[10px] text-gray-500">{xpProgress}%</span>
+                </div>
+                <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-neon-blue to-neon-purple rounded-full transition-all duration-500" style={{ width: `${xpProgress}%` }} />
+                </div>
+              </div>
+
+              {/* Streak */}
+              {user.login_streak > 0 && (
+                <div className="mt-3 flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-lg px-3 py-2">
+                  <span className="text-sm">🔥</span>
+                  <span className="text-xs text-orange-400 font-semibold">{user.login_streak} day streak</span>
+                  <span className="text-[10px] text-orange-400/60 ml-auto">Keep it up!</span>
+                </div>
+              )}
             </div>
 
-            {/* Desktop: single row */}
-            <div className="hidden sm:flex items-center justify-between gap-3 p-4">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-xl bg-neon-blue/10 border border-neon-blue/20 flex items-center justify-center text-neon-blue shrink-0">
-                  <BookOpen size={18} />
+            {/* Tablet */}
+            <div className="hidden sm:flex lg:hidden p-4 gap-4">
+              <div className="relative shrink-0">
+                <div className="w-16 h-16 rounded-2xl border border-white/[0.08] bg-[#0b0b12] flex items-center justify-center overflow-hidden">
+                  {user.avatar_url ? (
+                    <img src={user.avatar_url} alt={user.username} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-2xl font-bold text-white">{user.username?.charAt(0).toUpperCase()}</span>
+                  )}
                 </div>
-                <div className="min-w-0">
-                  <h1 className="text-base font-bold text-white truncate">
-                    Welcome, <span className="text-neon-blue">{user.username}</span>
-                  </h1>
-                  <p className="text-[11px] text-gray-500 mt-0.5">
-                    Lv.{level} · {user.xp || 0} XP
-                    {user.login_streak > 0 && <span className="ml-2 text-orange-400">🔥{user.login_streak}</span>}
-                  </p>
+                <div className="absolute -bottom-1 -right-1 min-w-[20px] h-[20px] px-1 bg-neon-green rounded-full border-2 border-[#12121b] flex items-center justify-center">
+                  <span className="text-[8px] font-black text-black">{level}</span>
                 </div>
               </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <div className="flex items-center gap-1 bg-white/[0.03] border border-white/[0.06] rounded-lg px-2.5 py-1.5">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-gray-500 font-medium">Welcome back,</p>
+                <h1 className="text-xl font-bold text-white truncate leading-tight">{user.username}</h1>
+                <div className="flex items-center gap-3 mt-2">
+                  <div className="flex items-center gap-1.5 bg-white/[0.03] border border-white/[0.04] rounded-lg px-2.5 py-1">
+                    <Zap size={12} className="text-neon-blue" />
+                    <span className="text-xs font-bold text-white">{user.xp || 0}</span>
+                    <span className="text-[10px] text-gray-500">XP</span>
+                  </div>
+                  {user.login_streak > 0 && (
+                    <div className="flex items-center gap-1 bg-orange-500/10 border border-orange-500/20 rounded-lg px-2.5 py-1">
+                      <span className="text-xs">🔥</span>
+                      <span className="text-xs font-bold text-orange-400">{user.login_streak}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-0.5 ml-auto">
                     {[...Array(3)].map((_, i) => (
                       <Heart key={i} size={14} className={i < user.hearts ? 'text-red-500 fill-red-500' : 'text-gray-700'} />
                     ))}
-                    {user.hearts >= 3 && <span className="text-[9px] text-gray-500 font-bold uppercase ml-0.5">Full</span>}
-                    {user.hearts < 3 && timeUntilRegen && (
-                      <span className="text-[9px] text-neon-blue font-mono font-bold animate-pulse ml-0.5">{formatTime(timeUntilRegen)}</span>
-                    )}
+                    <button onClick={() => setShowStore(true)} className="ml-1 w-5 h-5 rounded-full bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-gray-400 hover:text-white transition">
+                      <Plus size={10} />
+                    </button>
                   </div>
-                  <Button onClick={() => setShowStore(true)} variant="ghost" size="icon" className="w-7 h-7 text-neon-blue border border-neon-blue/20 hover:bg-neon-blue/10">
-                    <Plus size={14} />
-                  </Button>
                 </div>
+                <div className="mt-2.5">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-gray-500">Level {level} → {level + 1}</span>
+                    <span className="text-[10px] text-gray-500">{xpProgress}%</span>
+                  </div>
+                  <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-neon-blue to-neon-purple rounded-full transition-all duration-500" style={{ width: `${xpProgress}%` }} />
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Stats row — both mobile and desktop */}
-            <div className="grid grid-cols-3 border-t border-white/[0.04]">
-              {[
-                { icon: Zap, label: 'XP', value: user.xp || 0, color: 'text-neon-blue' },
-                { icon: Award, label: 'Level', value: level, color: 'text-neon-purple' },
-                { icon: TrendingUp, label: 'Quizzes', value: quizzes.length || 0, color: 'text-neon-green' },
-              ].map((s) => (
-                <div key={s.label} className="py-3 text-center border-r border-white/[0.04] last:border-r-0">
-                  <s.icon size={16} className={`${s.color} mx-auto mb-1`} />
-                  <p className="text-base font-bold text-white leading-none">{s.value}</p>
-                  <p className="text-[9px] text-gray-500 uppercase tracking-wider mt-0.5">{s.label}</p>
+            {/* Desktop */}
+            <div className="hidden lg:flex items-center gap-6 p-5">
+              <div className="relative shrink-0">
+                <div className="w-20 h-20 rounded-2xl border border-white/[0.08] bg-[#0b0b12] flex items-center justify-center overflow-hidden">
+                  {user.avatar_url ? (
+                    <img src={user.avatar_url} alt={user.username} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-3xl font-bold text-white">{user.username?.charAt(0).toUpperCase()}</span>
+                  )}
                 </div>
-              ))}
+                <div className="absolute -bottom-1.5 -right-1.5 min-w-[22px] h-[22px] px-1 bg-neon-green rounded-full border-2 border-[#12121b] flex items-center justify-center">
+                  <span className="text-[9px] font-black text-black">{level}</span>
+                </div>
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-gray-500 font-medium">Welcome back,</p>
+                <h1 className="text-2xl font-bold text-white truncate leading-tight">{user.username}</h1>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 bg-white/[0.03] border border-white/[0.04] rounded-xl px-3 py-2">
+                  <Zap size={14} className="text-neon-blue" />
+                  <span className="text-sm font-bold text-white">{user.xp || 0}</span>
+                  <span className="text-[10px] text-gray-500">XP</span>
+                </div>
+                {user.login_streak > 0 && (
+                  <div className="flex items-center gap-1.5 bg-orange-500/10 border border-orange-500/20 rounded-xl px-3 py-2">
+                    <span className="text-sm">🔥</span>
+                    <span className="text-sm font-bold text-orange-400">{user.login_streak}</span>
+                    <span className="text-[10px] text-orange-400/60">days</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="w-px h-10 bg-white/[0.06]" />
+
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  {[...Array(3)].map((_, i) => (
+                    <Heart key={i} size={16} className={i < user.hearts ? 'text-red-500 fill-red-500' : 'text-gray-700'} />
+                  ))}
+                  {user.hearts >= 3 && <span className="text-[10px] text-gray-500 font-medium ml-1">Full</span>}
+                  {user.hearts < 3 && timeUntilRegen && (
+                    <span className="text-[10px] text-neon-blue font-mono font-bold animate-pulse ml-1">{formatTime(timeUntilRegen)}</span>
+                  )}
+                </div>
+                <Button onClick={() => setShowStore(true)} variant="ghost" size="icon" className="w-9 h-9 text-gray-400 border border-white/[0.08] hover:text-white hover:bg-white/[0.05] rounded-xl">
+                  <Plus size={16} />
+                </Button>
+              </div>
+
+              <div className="w-px h-10 bg-white/[0.06]" />
+
+              <div className="w-40">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] text-gray-500">Level {level} → {level + 1}</span>
+                  <span className="text-[10px] text-gray-500">{xpProgress}%</span>
+                </div>
+                <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-neon-blue to-neon-purple rounded-full transition-all duration-500" style={{ width: `${xpProgress}%` }} />
+                </div>
+              </div>
             </div>
           </div>
 
