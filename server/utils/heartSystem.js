@@ -1,18 +1,20 @@
-export const calculateHearts = (user) => {
+export const calculateHearts = (hearts, lastMs) => {
   const MAX_HEARTS = 3;
   const REGEN_TIME_MS = 2 * 60 * 1000; // 2 minutes
 
-  let { hearts, last_heart_update } = user;
-  if (hearts >= MAX_HEARTS) return { hearts, last_heart_update: new Date() };
+  // Already full — nothing to regenerate.
+  if (hearts >= MAX_HEARTS) return { hearts, lastMs: Date.now() };
 
-  const now = new Date();
-  const lastUpdate = new Date(last_heart_update);
-  const diff = now - lastUpdate;
+  // No timestamp recorded yet — treat as "now" so no regeneration occurs.
+  if (lastMs == null || isNaN(lastMs)) return { hearts, lastMs: Date.now() };
+
+  const now = Date.now();
+  const diff = now - lastMs;
 
   if (diff >= REGEN_TIME_MS) {
     const regained = Math.floor(diff / REGEN_TIME_MS);
     hearts = Math.min(MAX_HEARTS, hearts + regained);
-    last_heart_update = now; 
+    lastMs = now;
   }
-  return { hearts, last_heart_update };
+  return { hearts, lastMs };
 };

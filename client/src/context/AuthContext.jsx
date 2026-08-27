@@ -9,8 +9,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const storedUser = localStorage.getItem('user');
       return storedUser ? JSON.parse(storedUser) : null;
-    } catch (error) {
-      console.error("Error parsing stored user:", error);
+    } catch {
       return null;
     }
   });
@@ -23,8 +22,8 @@ export const AuthProvider = ({ children }) => {
       setUser(data);
       // 2. Keep LocalStorage in sync with server data (hearts/xp changes)
       localStorage.setItem('user', JSON.stringify(data));
-    } catch (error) {
-      console.error("Failed to refresh user:", error);
+    } catch {
+      // not authenticated or network error
       // If unauthorized, api interceptor handles redirect, but we clear state here
       if (error.response && error.response.status === 401) {
          localStorage.removeItem('token');

@@ -125,10 +125,16 @@ export const googleCallback = async (req, res) => {
     const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
     setAuthCookie(res, token, req.secure);
 
-    console.log(`Google OAuth success: user=${user.username}, id=${user.id}`);
+    // Streak + daily bonus XP
+    const streakInfo = await User.updateStreak(user.id);
 
     // New Google users need to pick a username; existing users go to dashboard
     const isNewUser = !user.profile_complete;
+
+    const redirectTarget = isNewUser ? '/complete-profile' : '/dashboard';
+    const queryParams = streakInfo && streakInfo.bonusXp > 0
+      ? `?streak=${streakInfo.streak}&bonus=${streakInfo.bonusXp}`
+      : '';
 
     res.send(`
       <!DOCTYPE html>
@@ -137,7 +143,7 @@ export const googleCallback = async (req, res) => {
       <body>
         <p>Signing you in...</p>
         <script>
-          window.location.href = "${CLIENT_URL}${isNewUser ? '/complete-profile' : '/dashboard'}";
+          window.location.href = "${CLIENT_URL}${redirectTarget}${queryParams}";
         </script>
       </body>
       </html>
