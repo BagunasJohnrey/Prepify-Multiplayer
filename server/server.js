@@ -6,6 +6,7 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
 import cookie from "cookie";
+import crypto from "crypto";
 import dotenv from "dotenv";
 import rateLimit from "express-rate-limit"; 
 import authRoutes from "./routes/authRoutes.js";
@@ -26,8 +27,8 @@ const httpServer = createServer(app);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// CRITICAL FIX: Instruct Express to trust the proxy headers from Render/load balancer.
-app.set('trust proxy', 1);
+// Trust proxy headers from Render/load balancer (use numeric value for exact proxy count)
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : 'loopback');
 
 const PORT = process.env.PORT || 3000;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173'; 
@@ -50,8 +51,27 @@ const io = new SocketIOServer(httpServer, {
 
 app.set('socketio', io);
 
+// Socket.IO connection rate limiting (per IP)
+const socketConnections = new Map();
+const SOCKET_MAX_CONNECTIONS = 10;
+const SOCKET_RATE_WINDOW_MS = 60 * 1000;
+
 // Optional auth for sockets: members identified via their httpOnly cookie, guests proceed anonymously.
 io.use((socket, next) => {
+    // Rate limit per IP
+    const ip = socket.handshake.address;
+    const now = Date.now();
+    const record = socketConnections.get(ip) || { count: 0, resetAt: now + SOCKET_RATE_WINDOW_MS };
+    if (now > record.resetAt) {
+        record.count = 0;
+        record.resetAt = now + SOCKET_RATE_WINDOW_MS;
+    }
+    record.count++;
+    socketConnections.set(ip, record);
+    if (record.count > SOCKET_MAX_CONNECTIONS) {
+        return next(new Error('Too many connections from this IP'));
+    }
+
     try {
         const cookies = cookie.parse(socket.handshake.headers.cookie || "");
         const token = cookies.token || socket.handshake.auth?.token;
@@ -64,13 +84,37 @@ io.use((socket, next) => {
     next();
 });
 
+// Periodically clean up stale socket connection records
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, record] of socketConnections.entries()) {
+        if (now > record.resetAt) socketConnections.delete(ip);
+    }
+}, SOCKET_RATE_WINDOW_MS * 2);
+
 // Explicit Socket.IO Polling/Health Check Route
 app.get('/socket.io/', (req, res) => {
     res.status(200).send('Socket.IO health check successful.');
 });
 
 // Security headers
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'", "ws:", "wss:"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
 
 // Express CORS setup
 app.use(cors({
@@ -99,6 +143,17 @@ app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
 app.use("/api/auth/google", authLimiter);
 
+// Password reset limiter (lower threshold)
+const passwordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Too many password reset attempts, please try again later."
+});
+app.use("/api/auth/forgot-password", passwordResetLimiter);
+app.use("/api/auth/reset-password", passwordResetLimiter);
+
 const generateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, 
   max: 10,
@@ -106,7 +161,7 @@ const generateLimiter = rateLimit({
 });
 app.use("/api/generate", generateLimiter);
 
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 
 app.use("/api/auth", authRoutes); 
 app.use("/api", quizRoutes);      
@@ -189,7 +244,16 @@ const advanceGame = (roomCode, roomState) => {
             finalRanking: ranking,
             isFinal: true
         });
-        rooms.delete(roomCode); 
+        // Reset room to lobby state instead of deleting it
+        roomState.currentQ = 0;
+        roomState.quizData = null;
+        roomState.qStartTime = null;
+        if (roomState.qTimeout) { clearTimeout(roomState.qTimeout); roomState.qTimeout = null; }
+        for (const player of roomState.players) {
+            player.score = 0;
+            player.answers = [];
+            player.lastScore = 0;
+        }
     } else {
         roomState.currentQ++;
         
@@ -227,7 +291,11 @@ const advanceGame = (roomCode, roomState) => {
 
     socket.on('createRoom', (data) => {
         // Members are bound to their account username; guests use the client-supplied name.
-        const username = socket.user?.username || data.username;
+        const rawUsername = socket.user?.username || data.username;
+        // Sanitize guest usernames: alphanumeric + limited special chars, max 20 chars
+        const username = socket.user?.username
+          ? rawUsername
+          : String(rawUsername || '').replace(/[^a-zA-Z0-9_-]/g, '').trim().substring(0, 20);
         const { quizId } = data;
 
         if (rooms.size >= 1000) {
@@ -235,7 +303,7 @@ const advanceGame = (roomCode, roomState) => {
             return;
         }
 
-        const roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+        const roomCode = crypto.randomBytes(4).toString('hex').toUpperCase().substring(0, 6);
         
         socket.join(roomCode);
         
@@ -258,7 +326,10 @@ const advanceGame = (roomCode, roomState) => {
 
     socket.on('joinRoom', (data) => {
         const roomCode = data.roomCode;
-        const username = socket.user?.username || data.username;
+        const rawUsername = socket.user?.username || data.username;
+        const username = socket.user?.username
+          ? rawUsername
+          : String(rawUsername || '').replace(/[^a-zA-Z0-9_-]/g, '').trim().substring(0, 20);
         const roomState = rooms.get(roomCode);
         
         if (!roomState) {
@@ -283,8 +354,11 @@ const advanceGame = (roomCode, roomState) => {
         const roomCode = data.roomCode;
         const roomState = rooms.get(roomCode);
         if (!roomState) return;
-        const username = socket.user?.username || data.username;
-        const message = String(data.message || '').slice(0, 500).trim();
+        const rawUsername = socket.user?.username || data.username;
+        const username = socket.user?.username
+          ? rawUsername
+          : String(rawUsername || '').replace(/[^a-zA-Z0-9_-]/g, '').trim().substring(0, 20);
+        const message = String(data.message || '').replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' })[c]).slice(0, 500).trim();
         if (!message) return;
         const payload = { username, message, timestamp: Date.now() };
         io.to(roomCode).emit('lobbyChat', payload);
@@ -350,6 +424,18 @@ const advanceGame = (roomCode, roomState) => {
         } catch (error) {
             io.to(roomCode).emit('roomError', 'Internal server error starting game.');
         }
+    });
+
+    socket.on('changeQuiz', (data) => {
+        const { roomCode, quizId } = data;
+        const roomState = rooms.get(roomCode);
+        if (!roomState) return;
+        if (roomState.hostSocketId !== socket.id) {
+            socket.emit('roomError', 'Access Denied: Only host can change quiz.');
+            return;
+        }
+        roomState.quizId = quizId;
+        io.to(roomCode).emit('lobbyUpdate', getSafeRoomState(roomState));
     });
 
     socket.on('submitAnswer', (data) => {
@@ -468,6 +554,18 @@ const advanceGame = (roomCode, roomState) => {
             }
         }
     });
+});
+
+// ==========================================
+// GLOBAL ERROR HANDLER
+// ==========================================
+app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    const statusCode = err.statusCode || 500;
+    const message = process.env.NODE_ENV === 'production'
+        ? 'Internal server error'
+        : err.message || 'Internal server error';
+    res.status(statusCode).json({ error: message });
 });
 
 // ==========================================

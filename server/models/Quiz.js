@@ -70,7 +70,10 @@ export default {
   },
 
   async findById(id) {
-    const { rows } = await pool.query("SELECT * FROM quizzes WHERE id = $1", [id]);
+    const { rows } = await pool.query(
+      "SELECT id, title, course, difficulty, description, questions, items_count, share_id, tags, created_at FROM quizzes WHERE id = $1",
+      [id]
+    );
     return rows[0];
   },
 
@@ -84,7 +87,10 @@ export default {
   },
 
   async findByShareId(shareId) {
-    const { rows } = await pool.query("SELECT * FROM quizzes WHERE share_id = $1", [shareId]);
+    const { rows } = await pool.query(
+      "SELECT id, title, course, difficulty, description, items_count, share_id, tags, created_at FROM quizzes WHERE share_id = $1",
+      [shareId]
+    );
     return rows[0];
   },
 

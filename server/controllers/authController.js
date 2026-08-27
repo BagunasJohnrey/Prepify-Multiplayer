@@ -57,7 +57,11 @@ export const register = async (req, res) => {
     }
     res.status(201).json(newUser);
   } catch (err) {
-    res.status(400).json({ error: "Username likely already exists." });
+    if (err.code === "23505") {
+      return res.status(400).json({ error: "Username already exists." });
+    }
+    console.error("Register error:", err);
+    res.status(500).json({ error: "Registration failed. Please try again." });
   }
 };
 
@@ -232,7 +236,6 @@ export const login = async (req, res) => {
     setAuthCookie(res, token, req.secure);
 
     res.json({ 
-        token, 
         user: safeUser({ ...user, hearts: stats.hearts, last_heart_update: new Date(stats.lastMs), login_streak: streakInfo?.streak, longest_streak: streakInfo?.longest }),
         streakBonus: streakInfo?.bonusXp || 0,
         loginStreak: streakInfo?.streak || 0
@@ -319,9 +322,9 @@ export const loseHeart = async (req, res) => {
 };
 
 export const addXp = async (req, res) => {
-    const { amount } = req.body;
+    const XP_PER_QUIZ = 10;
     try {
-        await User.addXp(req.user.id, amount);
+        await User.addXp(req.user.id, XP_PER_QUIZ);
         res.json({ success: true });
     } catch {
         res.status(500).json({ error: "Failed to update XP" });

@@ -12,6 +12,15 @@ const QuizSchema = z.array(z.object({
   explanation: z.string()
 }));
 
+// Sanitize user input for AI prompt injection prevention
+const sanitizePromptInput = (input, maxLen = 500) => {
+  if (!input) return '';
+  return String(input)
+    .replace(/[^\w\s.,;:!?'"()-]/g, '')
+    .trim()
+    .substring(0, maxLen);
+};
+
 export const getQuizzes = async (req, res) => {
   try {
     const { course, page, limit, search, difficulty, tag } = req.query;
@@ -53,7 +62,17 @@ export const getSharedQuiz = async (req, res) => {
   try {
     const quiz = await Quiz.findByShareId(req.params.shareId);
     if (!quiz) return res.status(404).json({ error: "Quiz not found or link invalid" });
-    res.json({ ...quiz, shared: true });
+    // Strip answers from shared quiz to prevent answer leakage
+    let questions;
+    if (typeof quiz.questions === 'string') {
+      questions = JSON.parse(quiz.questions);
+    } else if (Array.isArray(quiz.questions)) {
+      questions = quiz.questions;
+    } else {
+      questions = [];
+    }
+    const sanitizedQuestions = questions.map(({ answer, ...rest }) => rest);
+    res.json({ ...quiz, questions: sanitizedQuestions, shared: true });
   } catch {
     res.status(500).json({ error: "Failed to load quiz" });
   }
@@ -70,12 +89,52 @@ export const deleteQuiz = async (req, res) => {
 
 export const saveResult = async (req, res) => {
   try {
-    const { quizId, score, total, history } = req.body;
-    if (!quizId || score === undefined || !total || !history) {
+    const { quizId, history } = req.body;
+    if (!quizId || !Array.isArray(history) || history.length === 0) {
       return res.status(400).json({ error: "Missing required fields" });
     }
-    const percentage = Math.round((score / total) * 100);
-    const result = await Result.create(req.user.id, quizId, score, total, history, percentage);
+
+    // Fetch the actual quiz from the DB to validate answers server-side
+    const quiz = await Quiz.findById(quizId);
+    if (!quiz || !quiz.questions) {
+      return res.status(404).json({ error: "Quiz not found" });
+    }
+
+    let questions;
+    if (typeof quiz.questions === 'string') {
+      questions = JSON.parse(quiz.questions);
+    } else if (Array.isArray(quiz.questions)) {
+      questions = quiz.questions;
+    } else {
+      return res.status(500).json({ error: "Invalid quiz data" });
+    }
+
+    const total = questions.length;
+    if (total === 0) {
+      return res.status(400).json({ error: "Quiz has no questions" });
+    }
+
+    // Build a map of correct answers from the DB
+    const correctAnswerMap = new Map();
+    for (const q of questions) {
+      correctAnswerMap.set(q.question, q.answer);
+    }
+
+    // Validate each history entry and recalculate score
+    let verifiedScore = 0;
+    const verifiedHistory = history.map((entry) => {
+      const correctAnswer = correctAnswerMap.get(entry.question);
+      if (correctAnswer === undefined) {
+        // Question not found in quiz — treat as wrong
+        return { ...entry, isCorrect: false, correct: null };
+      }
+      const isCorrect = entry.selected === correctAnswer;
+      if (isCorrect) verifiedScore++;
+      return { ...entry, isCorrect, correct: correctAnswer };
+    });
+
+    const percentage = Math.round((verifiedScore / total) * 100);
+    const result = await Result.create(req.user.id, quizId, verifiedScore, total, verifiedHistory, percentage);
     res.json(result);
   } catch {
     res.status(500).json({ error: "Failed to save result" });
@@ -188,9 +247,9 @@ export const generateQuiz = async (req, res) => {
         Create a strictly valid JSON exam based on the text segment below.
         
         CONTEXT:
-        - Course Type: ${course}
-        - Difficulty: ${difficulty}
-        - Description/Focus: ${description || "General coverage"}
+        - Course Type: ${sanitizePromptInput(course)}
+        - Difficulty: ${sanitizePromptInput(difficulty)}
+        - Description/Focus: ${sanitizePromptInput(description) || "General coverage"}
         - Count: Generate exactly ${currentBatchCount} unique questions.
 
         [CRITICAL] YOU MUST NOT GENERATE ANY QUESTION THAT IS SIMILAR TO THESE:
