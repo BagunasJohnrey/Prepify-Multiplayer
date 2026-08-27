@@ -13,6 +13,17 @@ import CompleteProfile from './pages/CompleteProfile';
 import About from './pages/About';
 import Documentation from './pages/Documentation';
 import Multiplayer from './pages/Multiplayer';
+import History from './pages/History';
+import SharedQuiz from './pages/SharedQuiz';
+import WrongAnswers from './pages/WrongAnswers';
+import Bookmarks from './pages/Bookmarks';
+import VerifyEmail from './pages/VerifyEmail';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+import Leaderboard from './pages/Leaderboard';
+import Flashcards from './pages/Flashcards';
+import ExportQuiz from './pages/ExportQuiz';
+import Friends from './pages/Friends';
 import NotFound from './pages/NotFound';
 
 export default function App() {
@@ -53,15 +64,25 @@ export default function App() {
             <Route path="/about" element={<About />} />
             <Route path="/documentation" element={<Documentation />} />
             <Route path="/multiplayer" element={<Multiplayer />} />
+            <Route path="/shared/:shareId" element={<SharedQuiz />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
 
             {/* Protected Routes */}
-              <Route element={<ProtectedRoute />}>
+<Route element={<ProtectedRoute />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/quiz/:id" element={<Quiz />} />
               <Route path="/result" element={<Result />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/complete-profile" element={<CompleteProfile />} />
-              
+              <Route path="/history" element={<History />} />
+              <Route path="/wrong-answers" element={<WrongAnswers />} />
+              <Route path="/bookmarks" element={<Bookmarks />} />
+              <Route path="/leaderboard" element={<Leaderboard />} />
+              <Route path="/flashcards/:quizId" element={<Flashcards />} />
+              <Route path="/export/:quizId" element={<ExportQuiz />} />
+              <Route path="/friends" element={<Friends />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

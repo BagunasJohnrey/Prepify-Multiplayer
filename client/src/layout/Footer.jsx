@@ -6,7 +6,7 @@ export default function Footer() {
   const { user } = useAuth();
 
   return (
-    <footer className="bg-dark-surface border-t border-gray-800 mt-auto">
+    <footer className={`bg-dark-surface border-t border-gray-800 mt-auto ${user ? 'hidden lg:block' : ''}`}>
       <div className="max-w-7xl mx-auto px-6 py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           

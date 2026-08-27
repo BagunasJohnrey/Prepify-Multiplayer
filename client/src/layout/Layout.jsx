@@ -12,10 +12,7 @@ export default function Layout({ children }) {
   const [showLogoutModal, setShowLogoutModal] = useState(false); // State managed here
 
   useEffect(() => {
-    window.scrollTo({
-      top: 0,
-      behavior: 'smooth'
-    });
+    window.scrollTo(0, 0);
   }, [pathname]);
 
   const handleConfirmLogout = () => {
@@ -30,7 +27,7 @@ export default function Layout({ children }) {
       {/* Navbar receives the handler to open the modal */}
       <Navbar onOpenLogout={() => setShowLogoutModal(true)} />
       
-      <main className="grow w-full">
+      <main className="grow w-full pb-20 lg:pb-0">
         {children}
       </main>
       
