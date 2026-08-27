@@ -22,11 +22,10 @@ export const AuthProvider = ({ children }) => {
       setUser(data);
       // 2. Keep LocalStorage in sync with server data (hearts/xp changes)
       localStorage.setItem('user', JSON.stringify(data));
-    } catch {
+    } catch (error) {
       // not authenticated or network error
       // If unauthorized, api interceptor handles redirect, but we clear state here
-      if (error.response && error.response.status === 401) {
-         localStorage.removeItem('token');
+      if (error?.response?.status === 401) {
          localStorage.removeItem('user');
          setUser(null);
       }
