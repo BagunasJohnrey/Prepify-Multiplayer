@@ -1,8 +1,50 @@
-import { X, Heart, ShoppingBag, Zap, ArrowRight } from 'lucide-react';
+import { X, Heart, ShoppingBag, Zap, Shield, Crown } from 'lucide-react';
 import Button from './ui/Button';
+
+const DEALS = [
+  {
+    id: 'heart-1',
+    icon: Heart,
+    iconColor: 'text-red-400',
+    iconBg: 'bg-red-500/10 border-red-500/20',
+    label: '+1 Heart',
+    description: 'Restore 1 life instantly',
+    cost: 50,
+    popular: false,
+  },
+  {
+    id: 'heart-3',
+    icon: Shield,
+    iconColor: 'text-neon-blue',
+    iconBg: 'bg-neon-blue/10 border-neon-blue/20',
+    label: '+3 Hearts',
+    description: 'Best for practice sessions',
+    cost: 120,
+    popular: true,
+    savings: 'Save 20%',
+  },
+  {
+    id: 'heart-5',
+    icon: Crown,
+    iconColor: 'text-neon-purple',
+    iconBg: 'bg-neon-purple/10 border-neon-purple/20',
+    label: '+5 Hearts',
+    description: 'Full refill for marathon study',
+    cost: 180,
+    popular: false,
+    savings: 'Save 40%',
+  },
+];
 
 export default function StoreModal({ isOpen, onClose, user, onBuyHeart }) {
   if (!isOpen) return null;
+
+  const handleBuy = async (deal) => {
+    const times = deal.id === 'heart-1' ? 1 : deal.id === 'heart-3' ? 3 : 5;
+    for (let i = 0; i < times; i++) {
+      await onBuyHeart();
+    }
+  };
 
   return (
     <div
@@ -27,7 +69,7 @@ export default function StoreModal({ isOpen, onClose, user, onBuyHeart }) {
         </div>
 
         {/* Balance */}
-        <div className="p-5">
+        <div className="p-5 pb-3">
           <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Current Balance</p>
             <div className="flex items-center justify-center gap-2">
@@ -38,28 +80,39 @@ export default function StoreModal({ isOpen, onClose, user, onBuyHeart }) {
           </div>
         </div>
 
-        {/* Items */}
-        <div className="px-5 pb-5 space-y-3">
-          <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-4 flex items-center justify-between hover:border-red-500/20 transition">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
-                <Heart size={22} className="text-red-500 fill-red-500" />
+        {/* Deals */}
+        <div className="px-5 pb-4 space-y-2.5">
+          {DEALS.map((deal) => {
+            const Icon = deal.icon;
+            const canAfford = (user?.xp || 0) >= deal.cost;
+            return (
+              <div key={deal.id} className={`relative bg-white/[0.02] border rounded-xl p-4 flex items-center justify-between transition ${deal.popular ? 'border-neon-blue/30' : 'border-white/[0.06]'}`}>
+                {deal.savings && (
+                  <span className="absolute -top-2.5 right-4 text-[9px] font-bold bg-neon-green text-black px-2 py-0.5 rounded-full">{deal.savings}</span>
+                )}
+                <div className="flex items-center gap-3">
+                  <div className={`w-11 h-11 rounded-xl border flex items-center justify-center ${deal.iconBg}`}>
+                    <Icon size={20} className={deal.iconColor} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-white">{deal.label}</p>
+                    <p className="text-xs text-gray-500">{deal.description}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleBuy(deal)}
+                  disabled={!canAfford}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-bold transition-all ${
+                    canAfford
+                      ? 'bg-neon-green text-black hover:bg-[#39ff14] shadow-[0_0_12px_rgba(57,255,20,0.15)]'
+                      : 'bg-white/[0.04] text-gray-500 border border-white/[0.06] cursor-not-allowed'
+                  }`}
+                >
+                  {deal.cost} XP
+                </button>
               </div>
-              <div>
-                <p className="text-sm font-bold text-white">+1 Heart</p>
-                <p className="text-xs text-gray-500">Restore 1 life instantly</p>
-              </div>
-            </div>
-            <Button
-              onClick={onBuyHeart}
-              disabled={user?.xp < 50}
-              size="sm"
-              variant={user?.xp >= 50 ? 'primary' : 'outline'}
-              className={`font-bold px-4 ${user?.xp < 50 ? 'border-white/[0.08] text-gray-500 cursor-not-allowed' : 'bg-neon-green text-black hover:bg-[#39ff14] shadow-[0_0_15px_rgba(57,255,20,0.2)]'}`}
-            >
-              <Zap size={14} /> 50 XP
-            </Button>
-          </div>
+            );
+          })}
         </div>
 
         {/* Footer */}

@@ -155,19 +155,57 @@ export default function Quiz() {
   );
 
   if (hearts === 0) return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#0b0b12] p-6">
-      <div className="bg-[#12121b] p-10 rounded-3xl border border-white/[0.06] shadow-2xl max-w-md w-full text-center">
-        <div className="w-20 h-20 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 mx-auto mb-6">
-          <Heart size={40} />
+    <div className="min-h-screen flex items-center justify-center bg-[#0b0b12] p-4">
+      <div className="w-full max-w-sm space-y-8 animate-fade-in">
+        <div className="text-center space-y-3">
+          <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 mx-auto">
+            <Heart size={32} />
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white">Out of Lives</h1>
+          <p className="text-gray-400 text-sm">You answered incorrectly too many times. Your hearts will regenerate in 2 minutes.</p>
         </div>
-        <h1 className="text-3xl font-black text-white mb-2">OUT OF LIVES</h1>
-        <p className="text-gray-400 mb-8 text-sm leading-relaxed">You answered incorrectly too many times. Your hearts will regenerate in 2 minutes.</p>
-        
-        <Button 
+
+        <div className="bg-[#12121b] rounded-2xl border border-white/[0.06] p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                <Heart size={18} className="text-red-500 fill-red-500" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-white">+1 Heart</p>
+                <p className="text-xs text-gray-500">Restore instantly</p>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                if (user?.xp < 50) { toast.error("Not enough XP!"); return; }
+                try {
+                  await api.post('/auth/buy-heart');
+                  setHearts(h => h + 1);
+                  await refreshUser();
+                  toast.success("Heart purchased!");
+                } catch (err) {
+                  toast.error(err.response?.data?.error || "Failed");
+                }
+              }}
+              disabled={user?.xp < 50}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                user?.xp >= 50
+                  ? 'bg-neon-green text-black hover:bg-[#39ff14] shadow-[0_0_15px_rgba(57,255,20,0.2)]'
+                  : 'bg-white/[0.04] text-gray-500 border border-white/[0.06] cursor-not-allowed'
+              }`}
+            >
+              50 XP
+            </button>
+          </div>
+          <p className="text-center text-gray-600 text-xs">Your balance: <span className="text-neon-blue font-bold">{user?.xp || 0}</span> XP</p>
+        </div>
+
+        <Button
           onClick={() => navigate('/dashboard')}
-          variant="primary"
+          variant="outline"
           fullWidth
-          className="h-12"
+          className="h-14 text-base font-bold border-white/[0.08] text-gray-400 hover:text-white hover:bg-white/[0.03]"
         >
           Return to Dashboard
         </Button>
