@@ -53,37 +53,65 @@ export default function About() {
   return (
     <div className="min-h-screen bg-[#0b0b12]">
       {/* Hero */}
-      <section className="relative overflow-hidden py-24 sm:py-32 px-4 sm:px-6">
+      <section className="relative overflow-hidden pt-20 pb-16 sm:pt-28 sm:pb-24 px-4 sm:px-6">
+        {/* Animated background orbs */}
         <div className="pointer-events-none absolute inset-0">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-neon-blue/8 blur-[150px] rounded-full" />
-          <div className="absolute top-20 left-1/4 w-[400px] h-[400px] bg-neon-purple/6 blur-[120px] rounded-full" />
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] sm:w-[800px] h-[400px] sm:h-[500px] bg-neon-blue/10 blur-[120px] sm:blur-[150px] rounded-full animate-pulse" />
+          <div className="absolute top-10 left-1/4 w-[300px] sm:w-[400px] h-[300px] sm:h-[400px] bg-neon-purple/8 blur-[100px] sm:blur-[120px] rounded-full animate-pulse" style={{ animationDelay: '1s' }} />
+          <div className="absolute bottom-0 right-1/4 w-[250px] sm:w-[350px] h-[250px] sm:h-[350px] bg-neon-green/6 blur-[80px] sm:blur-[100px] rounded-full animate-pulse" style={{ animationDelay: '2s' }} />
         </div>
 
         <div className="relative max-w-5xl mx-auto text-center">
+          <div className="mb-6 sm:mb-8" />
+
+          {/* Main heading with staggered glow */}
           <AnimatedSection>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white leading-tight mb-6">
-              Study Smarter,{' '}
-              <span className="text-white">
+            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black text-white leading-[1.1] mb-4 sm:mb-6 tracking-tight">
+              <span className="block">Study Smarter,</span>
+              <span className="block mt-1 sm:mt-2 bg-gradient-to-r from-neon-blue via-white to-neon-purple bg-clip-text text-transparent">
                 Not Harder
               </span>
             </h1>
           </AnimatedSection>
 
+          {/* Glowing line accent */}
+          <AnimatedSection delay={50}>
+            <div className="flex justify-center mb-6 sm:mb-8">
+              <div className="w-16 h-1 bg-gradient-to-r from-neon-blue to-neon-purple rounded-full shadow-[0_0_20px_rgba(0,243,255,0.5)]" />
+            </div>
+          </AnimatedSection>
+
+          {/* Subtitle */}
           <AnimatedSection delay={100}>
-            <p className="text-gray-400 text-lg sm:text-xl mb-10 max-w-2xl mx-auto leading-relaxed">
+            <p className="text-gray-400 text-base sm:text-lg lg:text-xl mb-8 sm:mb-10 max-w-xl mx-auto leading-relaxed px-2">
               Upload any PDF and let AI create personalized quizzes in seconds. 
               Track your progress, challenge friends, and ace every exam.
             </p>
           </AnimatedSection>
 
+          {/* CTA Buttons - stacked on mobile */}
           <AnimatedSection delay={200}>
-            <div className="flex justify-center gap-3">
-              <Button onClick={handleStart} size="lg" className="px-8 bg-neon-blue text-black font-bold hover:opacity-90 transition-all duration-300">
-                Get Started Free <ArrowRight size={18} />
+            <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 px-4 sm:px-0">
+              <Button onClick={handleStart} size="lg" className="w-full sm:w-auto px-8 py-4 bg-neon-blue text-black font-bold hover:opacity-90 transition-all duration-300 shadow-[0_0_30px_rgba(0,243,255,0.3)] hover:shadow-[0_0_40px_rgba(0,243,255,0.5)] text-base sm:text-lg">
+                Get Started Free <ArrowRight size={20} />
               </Button>
-              <Button onClick={() => navigate('/documentation')} variant="outline" size="lg" className="px-8 border-white/[0.1] text-gray-300 hover:text-white hover:bg-white/[0.03]">
+              <Button onClick={() => navigate('/documentation')} variant="outline" size="lg" className="w-full sm:w-auto px-8 py-4 border-white/[0.1] text-gray-300 hover:text-white hover:bg-white/[0.03] text-base sm:text-lg">
                 Learn More
               </Button>
+            </div>
+          </AnimatedSection>
+
+          {/* Social proof */}
+          <AnimatedSection delay={300}>
+            <div className="mt-10 sm:mt-14 flex flex-col items-center gap-3">
+              <div className="flex -space-x-2">
+                {[1, 5, 11, 16, 32].map((id) => (
+                  <img key={id} src={`https://i.pravatar.cc/150?img=${id}`} alt="Student" className="w-8 h-8 rounded-full border-2 border-[#0b0b12] object-cover" />
+                ))}
+              </div>
+              <p className="text-xs sm:text-sm text-gray-500">
+                <span className="text-white font-semibold">2,000+</span> students already learning smarter
+              </p>
             </div>
           </AnimatedSection>
         </div>
