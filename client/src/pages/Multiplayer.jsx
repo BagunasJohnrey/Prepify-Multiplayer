@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Users, PlusCircle, LogIn, Loader, Clock, Trophy, Zap, AlertCircle, CheckCircle, XCircle, Copy, Link as LinkIcon, Share2, User, KeyRound, ArrowRight, UserPlus, ArrowLeft, Gamepad2, MessageCircle } from 'lucide-react';
+import { Users, PlusCircle, LogIn, Loader, Clock, Trophy, Zap, AlertCircle, CheckCircle, XCircle, Copy, Link as LinkIcon, ArrowRight, Gamepad2, MessageCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -8,7 +8,6 @@ import toast from 'react-hot-toast';
 import socket from '../utils/socket';
 import api from '../utils/api';
 import Confetti from 'react-confetti';
-import { QRCodeSVG } from 'qrcode.react';
 
 const COUNTDOWN_SECONDS = 5;
 const QUESTION_TIME_MS = 20000;
@@ -55,12 +54,12 @@ export default function Multiplayer() {
     const chatEndRef = useRef(null);
 
     const stateRef = useRef({
-        availableQuizzes, currentQIndex, user, guestName, isGuestSetup, view, lobbyData, roomCode
+        availableQuizzes, currentQIndex, user, guestName, isGuestSetup, view, lobbyData, roomCode, gameQuestions
     });
 
     useEffect(() => {
-        stateRef.current = { availableQuizzes, currentQIndex, user, guestName, isGuestSetup, view, lobbyData, roomCode };
-    }, [availableQuizzes, currentQIndex, user, guestName, isGuestSetup, view, lobbyData, roomCode]);
+        stateRef.current = { availableQuizzes, currentQIndex, user, guestName, isGuestSetup, view, lobbyData, roomCode, gameQuestions };
+    }, [availableQuizzes, currentQIndex, user, guestName, isGuestSetup, view, lobbyData, roomCode, gameQuestions]);
 
     const handleCancel = useCallback(() => {
         setIsRoomActionPending(false);
@@ -78,6 +77,10 @@ export default function Multiplayer() {
             if (!isGuestSetup && view !== 'guest_entry') setView('guest_entry');
         }
     }, [user, authLoading, isGuestSetup, view]);
+
+    useEffect(() => {
+        window.scrollTo(0, 0);
+    }, [view]);
 
     useEffect(() => {
         const searchParams = new URLSearchParams(location.search);
@@ -210,20 +213,21 @@ export default function Multiplayer() {
             setShowAnswerKey(true);
             setRevealCountdown(ANSWER_REVEAL_DELAY_MS / 1000);
 
-            const state = stateRef.current;
-            const q = state.gameQuestions?.[data.qIndex];
-            const me = data.players?.find(p => p.username === state.currentUsername);
-            const myAnswer = me?.answers?.[data.qIndex];
-            setQuestionResults(prev => [...prev, {
-                qIndex: data.qIndex,
-                question: q?.question || '',
-                options: q?.options || [],
-                correctAnswer: data.correctAnswer,
-                explanation: data.correctExplanation,
-                playerAnswer: myAnswer?.selected || null,
-                isCorrect: myAnswer?.selected === data.correctAnswer,
-                points: me?.lastScore || 0,
-            }]);
+        const state = stateRef.current;
+        const currentUsername = state.user?.username || (state.isGuestSetup ? state.guestName : null);
+        const q = state.gameQuestions?.[data.qIndex];
+        const me = data.players?.find(p => p.username === currentUsername);
+        const myAnswer = me?.answers?.[data.qIndex];
+        setQuestionResults(prev => [...prev, {
+            qIndex: data.qIndex,
+            question: q?.question || '',
+            options: q?.options || [],
+            correctAnswer: data.correctAnswer,
+            explanation: data.correctExplanation,
+            playerAnswer: myAnswer?.selected || null,
+            isCorrect: myAnswer?.selected === data.correctAnswer,
+            points: me?.lastScore || 0,
+        }]);
         };
 
         const handleNextQuestion = (data) => {
@@ -319,7 +323,7 @@ export default function Multiplayer() {
         e.preventDefault();
         if (isRoomActionPending) return toast.error("Already connecting...");
         const code = roomCode.toUpperCase();
-        if (!currentUsername || code.length !== 4) return toast.error("Enter a valid 4-letter code and name.");
+        if (!currentUsername || code.length !== 6) return toast.error("Enter a valid 6-letter code and name.");
 
         setChatMessages([]);
         setRoomCode(code);
@@ -372,6 +376,28 @@ export default function Multiplayer() {
         setChatInput('');
     };
 
+    const backToLobby = () => {
+        setGameQuestions(null);
+        setCurrentQIndex(0);
+        setPlayerRanking(null);
+        setIsAnswered(false);
+        setShowAnswerKey(false);
+        setQAnswer(null);
+        setQuestionResults([]);
+        setPlayerAnswerLocal(null);
+        stopQuestionTimer();
+        setView('lobby');
+    };
+
+    const handleChangeQuiz = (e) => {
+        const newQuizId = e.target.value;
+        if (!newQuizId || !lobbyData) return;
+        setSelectedQuizId(newQuizId);
+        const quiz = availableQuizzes.find(q => String(q.id) === String(newQuizId));
+        setLobbyData(prev => ({ ...prev, quizId: newQuizId, quizTitle: quiz?.title || prev.quizTitle }));
+        socket.emit('changeQuiz', { roomCode: lobbyData.roomCode, quizId: newQuizId });
+    };
+
     const copyToClipboard = (text, field) => {
         navigator.clipboard.writeText(text);
         setCopiedField(field);
@@ -386,37 +412,35 @@ export default function Multiplayer() {
     // --- RENDERERS ---
 
     const renderGuestEntry = () => (
-        <div className="bg-[#0b0b12] flex items-center justify-center p-4">
-            <div className="w-full max-w-md animate-fade-in">
-                <div className="bg-[#12121b] rounded-2xl border border-white/[0.06] p-8 text-center">
-                    <div className="w-16 h-16 rounded-2xl bg-neon-purple/10 border border-neon-purple/20 flex items-center justify-center text-neon-purple mx-auto mb-6 shadow-[0_0_30px_rgba(188,19,254,0.15)]">
-                        <UserPlus size={32} />
-                    </div>
-                    <h2 className="text-2xl font-bold text-white mb-2">Identify Yourself</h2>
-                    <p className="text-gray-400 text-sm mb-8">Enter a temporary nickname to join the arena.</p>
-
-                    <form onSubmit={handleGuestEntry} className="space-y-4">
-                        <input
-                            type="text"
-                            placeholder="e.g. Maverick"
-                            value={guestName}
-                            onChange={(e) => setGuestName(e.target.value)}
-                            className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-white text-center text-lg font-bold tracking-wide focus:border-neon-purple focus:outline-none transition"
-                        />
-                        <Button type="submit" variant="primary" fullWidth className="h-12 text-base font-bold shadow-lg bg-neon-blue text-black">
-                            Continue as Guest <ArrowRight size={18} />
-                        </Button>
-                    </form>
-
-                    <div className="relative py-6">
-                        <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/[0.06]"></div></div>
-                        <div className="relative flex justify-center text-xs"><span className="px-4 bg-[#12121b] text-gray-500 font-bold tracking-widest uppercase">Member Access</span></div>
-                    </div>
-
-                    <Button onClick={() => navigate('/')} variant="outline" fullWidth className="h-12 border-white/[0.08] text-gray-400 hover:text-white hover:bg-white/[0.03]">
-                        <LogIn size={18} /> Login / Register
-                    </Button>
+        <div className="flex items-center justify-center min-h-screen p-4 -mt-16">
+            <div className="w-full max-w-sm animate-fade-in space-y-8">
+                <div className="text-center">
+                    <h1 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">Identify Yourself</h1>
+                    <p className="text-gray-400 text-sm mt-2">Enter a temporary nickname to join the arena.</p>
                 </div>
+
+                <form onSubmit={handleGuestEntry} className="space-y-4">
+                    <input
+                        type="text"
+                        placeholder="e.g. Maverick"
+                        value={guestName}
+                        onChange={(e) => setGuestName(e.target.value)}
+                        autoFocus
+                        className="w-full bg-[#12121b] border border-white/[0.06] rounded-xl p-4 text-white text-center text-lg font-bold tracking-wide focus:border-neon-purple focus:outline-none transition placeholder-gray-600"
+                    />
+                    <Button type="submit" variant="primary" fullWidth className="h-14 text-base font-bold">
+                        Continue as Guest <ArrowRight size={18} />
+                    </Button>
+                </form>
+
+                <div className="relative py-2">
+                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/[0.06]"></div></div>
+                    <div className="relative flex justify-center text-xs"><span className="px-4 bg-[#0b0b12] text-gray-500 font-bold tracking-widest uppercase">or</span></div>
+                </div>
+
+                <Button onClick={() => navigate('/')} variant="outline" fullWidth className="h-14 text-base font-bold border-white/[0.08] text-gray-400 hover:text-white hover:bg-white/[0.03]">
+                    Login / Register
+                </Button>
             </div>
         </div>
     );
@@ -492,7 +516,7 @@ export default function Multiplayer() {
                             <LogIn size={24} />
                         </div>
                         <h3 className="text-lg font-bold text-white mb-1 group-hover:text-neon-green transition-colors">Join Room</h3>
-                        <p className="text-sm text-gray-400 leading-relaxed">Enter an existing 4-digit room code to jump into a lobby instantly.</p>
+                        <p className="text-sm text-gray-400 leading-relaxed">Enter an existing 6-digit room code to jump into a lobby instantly.</p>
                         <div className="mt-4 flex items-center gap-1.5 text-xs font-medium text-gray-500 group-hover:text-neon-green transition-colors">
                             <span>Enter code</span>
                             <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
@@ -510,243 +534,263 @@ export default function Multiplayer() {
         </div>
     );
 
+    const CODE_LENGTH = 6;
+    const codeInputRefs = useRef([]);
+
+    const handleCodeChange = (index, value) => {
+        if (!/^[a-zA-Z0-9]?$/.test(value)) return;
+        const upper = value.toUpperCase();
+        const chars = roomCode.split('');
+        chars[index] = upper;
+        const next = chars.join('');
+        setRoomCode(next);
+        if (upper && index < CODE_LENGTH - 1) {
+            codeInputRefs.current[index + 1]?.focus();
+        }
+    };
+
+    const handleCodeKeyDown = (index, e) => {
+        if (e.key === 'Backspace' && !roomCode[index] && index > 0) {
+            codeInputRefs.current[index - 1]?.focus();
+        }
+    };
+
+    const handleCodePaste = (e) => {
+        e.preventDefault();
+        const pasted = e.clipboardData.getData('text').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, CODE_LENGTH);
+        setRoomCode(pasted);
+        const focusIdx = Math.min(pasted.length, CODE_LENGTH - 1);
+        codeInputRefs.current[focusIdx]?.focus();
+    };
+
     const renderJoinRoom = () => (
-        <form onSubmit={handleJoinRoom} className="space-y-8 animate-fade-in">
-            <div className="flex items-center gap-4">
-                <Button type="button" variant="ghost" size="icon" onClick={handleCancel} className="text-gray-400 hover:text-white hover:bg-white/5 border border-white/10">
-                    <ArrowLeft size={20} />
-                </Button>
-                <div className="flex items-start gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-neon-green/10 border border-neon-green/20 flex items-center justify-center text-neon-green shadow-[0_0_30px_rgba(57,255,20,0.12)]">
-                        <KeyRound size={24} />
-                    </div>
-                    <div>
-                        <h2 className="text-2xl font-bold text-white tracking-tight">Join a Game</h2>
-                        <p className="text-sm text-gray-400 mt-0.5">Enter the room code from your friend</p>
-                    </div>
+        <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] -mt-10 px-4 animate-fade-in">
+            <form onSubmit={handleJoinRoom} className="w-full max-w-md space-y-8">
+                <div className="text-center">
+                    <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">Join a Game</h2>
+                    <p className="text-gray-400 text-sm mt-2">Enter the room code from your friend</p>
                 </div>
-            </div>
 
-            {/* Code Input */}
-            <div className="bg-[#12121b] p-6 rounded-2xl border border-white/[0.06]">
-                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block text-left mb-4">Room Code</label>
-                <div className="flex items-center justify-center py-4">
-                    <div className="relative group w-full max-w-xs mx-auto">
-                        <div className="absolute inset-0 bg-neon-green/10 blur-xl rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500" />
-                        <input
-                            type="text"
-                            placeholder="____"
-                            value={roomCode}
-                            onChange={e => setRoomCode(e.target.value.toUpperCase())}
-                            maxLength={4}
-                            autoFocus
-                            className="relative w-full text-center text-5xl font-mono font-bold uppercase tracking-[0.5em] py-6 bg-white/[0.03] border-2 border-white/[0.06] rounded-2xl text-white focus:border-neon-green focus:outline-none transition-all placeholder-gray-700"
-                        />
+                <div className="bg-[#12121b] p-8 rounded-2xl border border-white/[0.06]">
+                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block text-center mb-6">Room Code</label>
+                    <div className="flex items-center justify-center gap-2 sm:gap-3">
+                        {Array.from({ length: CODE_LENGTH }).map((_, i) => (
+                            <input
+                                key={i}
+                                ref={el => codeInputRefs.current[i] = el}
+                                type="text"
+                                inputMode="text"
+                                maxLength={1}
+                                autoFocus={i === 0}
+                                value={roomCode[i] || ''}
+                                onChange={e => handleCodeChange(i, e.target.value)}
+                                onKeyDown={e => handleCodeKeyDown(i, e)}
+                                onPaste={i === 0 ? handleCodePaste : undefined}
+                                className="w-11 h-14 sm:w-14 sm:h-16 text-center text-2xl sm:text-3xl font-mono font-bold uppercase bg-white/[0.03] border-2 border-white/[0.06] rounded-xl text-white focus:border-neon-green focus:outline-none transition-all placeholder-gray-700"
+                            />
+                        ))}
                     </div>
+                    <p className="text-xs text-gray-500 text-center mt-5">6-character code from the host</p>
                 </div>
-                <p className="text-xs text-gray-500 text-center mt-2">Ask the host for the 4-character code</p>
-            </div>
 
-            <div className="grid grid-cols-2 gap-3">
-                <Button type="button" onClick={handleCancel} variant="outline" className="border-white/[0.08] text-gray-400 hover:text-white hover:bg-white/[0.03] h-12">
-                    Cancel
-                </Button>
-                <Button type="submit" variant="success" className="h-12 font-bold" disabled={isRoomActionPending || roomCode.length !== 4}>
-                    Join Game
-                </Button>
-            </div>
-        </form>
+                <div className="grid grid-cols-2 gap-3">
+                    <Button type="button" onClick={handleCancel} variant="outline" className="h-14 text-base font-bold border-white/[0.08] text-gray-400 hover:text-white hover:bg-white/[0.03]">
+                        Cancel
+                    </Button>
+                    <Button type="submit" variant="success" className="h-14 text-base font-bold" disabled={isRoomActionPending || roomCode.length !== CODE_LENGTH}>
+                        Join Game
+                    </Button>
+                </div>
+            </form>
+        </div>
     );
 
     const renderCreateRoom = () => (
-        <form onSubmit={handleCreateRoom} className="space-y-8 animate-fade-in">
-            <div className="flex items-center gap-4">
-                <Button type="button" variant="ghost" size="icon" onClick={handleCancel} className="text-gray-400 hover:text-white hover:bg-white/5 border border-white/10">
-                    <ArrowLeft size={20} />
-                </Button>
-                <div className="flex items-start gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-neon-blue/10 border border-neon-blue/20 flex items-center justify-center text-neon-blue shadow-[0_0_30px_rgba(0,243,255,0.12)]">
-                        <PlusCircle size={24} />
+        <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] -mt-10 px-4 animate-fade-in">
+            <form onSubmit={handleCreateRoom} className="w-full max-w-md space-y-8">
+                <div className="text-center">
+                    <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">Create a Game</h2>
+                    <p className="text-gray-400 text-sm mt-2">Set up a room and invite your friends</p>
+                </div>
+
+                <div className="bg-[#12121b] p-8 rounded-2xl border border-white/[0.06] space-y-6">
+                    <div className="text-center space-y-1">
+                        <p className="text-sm text-gray-300 font-medium">Quiz selection happens in the lobby</p>
+                        <p className="text-xs text-gray-500">You'll pick the quiz material after the room is created</p>
                     </div>
-                    <div>
-                        <h2 className="text-2xl font-bold text-white tracking-tight">Create a Game</h2>
-                        <p className="text-sm text-gray-400 mt-0.5">Pick a quiz and invite your friends</p>
+                    <div className="flex items-center justify-center gap-3 p-4 bg-neon-blue/5 border border-neon-blue/15 rounded-xl">
+                        <AlertCircle size={16} className="text-neon-blue shrink-0" />
+                        <p className="text-xs text-neon-blue/70 leading-relaxed">
+                            As the host, you control when the game starts and which quiz to use.
+                        </p>
                     </div>
                 </div>
-            </div>
 
-            {/* Quiz Selection */}
-            <div className="bg-[#12121b] p-5 rounded-2xl border border-white/[0.06] space-y-4">
-                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider text-left block">Quiz Material</label>
-                {quizzesLoading ? (
-                    <div className="space-y-2">
-                        {[...Array(3)].map((_, i) => (
-                            <div key={i} className="h-14 bg-white/[0.04] rounded-xl animate-pulse"></div>
-                        ))}
-                    </div>
-                ) : (
-                    <>
-                        <select
-                            value={selectedQuizId || ''}
-                            onChange={(e) => setSelectedQuizId(e.target.value)}
-                            className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-white focus:border-neon-blue outline-none cursor-pointer text-sm appearance-none transition font-medium"
-                        >
-                            {availableQuizzes.map(quiz => (
-                                <option key={quiz.id} value={String(quiz.id)} className="bg-[#1a1a2e]">
-                                    {quiz.title} • {quiz.difficulty}
-                                </option>
-                            ))}
-                        </select>
-
-                        {selectedQuizId && (
-                            <div className="p-4 bg-neon-blue/5 border border-neon-blue/15 rounded-xl flex items-start gap-3">
-                                <AlertCircle size={18} className="text-neon-blue mt-0.5 shrink-0" />
-                                <p className="text-xs text-neon-blue/70 leading-relaxed">
-                                    As the host, you control when the game starts. Share the room code with friends once the lobby is ready.
-                                </p>
-                            </div>
-                        )}
-                    </>
-                )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-                <Button type="button" onClick={handleCancel} variant="outline" className="border-white/[0.08] text-gray-400 hover:text-white hover:bg-white/[0.03] h-12">
-                    Cancel
-                </Button>
-                <Button type="submit" variant="primary" className="h-12 font-bold" disabled={isRoomActionPending}>
-                    Create Room
-                </Button>
-            </div>
-        </form>
+                <div className="grid grid-cols-2 gap-3">
+                    <Button type="button" onClick={handleCancel} variant="outline" className="h-14 text-base font-bold border-white/[0.08] text-gray-400 hover:text-white hover:bg-white/[0.03]">
+                        Cancel
+                    </Button>
+                    <Button type="submit" variant="primary" className="h-14 text-base font-bold" disabled={isRoomActionPending}>
+                        Create Room
+                    </Button>
+                </div>
+            </form>
+        </div>
     );
 
     const renderLobby = () => {
         if (!lobbyData) return renderMenu();
         const players = lobbyData.players || [];
+        const isHost = lobbyData.host === currentUsername;
         const inviteLink = `${window.location.origin}/multiplayer?code=${lobbyData.roomCode}`;
 
         return (
-            <div className="space-y-6 animate-fade-in">
-                <div className="flex items-start gap-4">
-                    <Button variant="ghost" size="icon" onClick={leaveRoom} className="text-gray-400 hover:text-white hover:bg-white/5 border border-white/10 shrink-0 mt-1">
-                        <ArrowLeft size={20} />
-                    </Button>
-                    <div>
-                        <span className="text-[10px] font-bold text-neon-blue uppercase tracking-widest bg-neon-blue/10 px-2.5 py-1 rounded-md border border-neon-blue/20 inline-block mb-2">Lobby Active</span>
-                        <h2 className="text-xl sm:text-2xl font-bold text-white leading-tight">{lobbyData.quizTitle}</h2>
+            <div className="flex flex-col min-h-[calc(100vh-4rem)] -mt-10 animate-fade-in">
+                {/* Header */}
+                <div className="text-center pt-12 sm:pt-16 pb-6">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Lobby</h1>
+                    <p className="text-gray-400 text-sm mt-1.5">{lobbyData.quizTitle}</p>
+                </div>
+
+                {/* Room Code Banner */}
+                <div className="mx-4 sm:mx-auto sm:w-full sm:max-w-lg">
+                    <div className="bg-[#12121b] rounded-2xl border border-white/[0.06] p-6 sm:p-8 space-y-5">
+                        {/* Top row: label + badges */}
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Room Code</span>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold bg-neon-green/10 text-neon-green px-2 py-0.5 rounded border border-neon-green/20">{players.length} player{players.length !== 1 ? 's' : ''}</span>
+                                {isHost && <span className="text-[10px] font-bold bg-neon-purple/10 text-neon-purple px-2 py-0.5 rounded border border-neon-purple/20">HOST</span>}
+                            </div>
+                        </div>
+
+                        {/* Code boxes */}
+                        <div className="flex items-center justify-center gap-2 sm:gap-3">
+                            {lobbyData.roomCode.split('').map((char, i) => (
+                                <span key={i} className="w-10 h-12 sm:w-12 sm:h-14 flex items-center justify-center text-xl sm:text-2xl font-mono font-bold text-neon-green bg-white/[0.03] border border-white/[0.06] rounded-xl">{char}</span>
+                            ))}
+                        </div>
+
+                        {/* Copy code button */}
+                        <button
+                            type="button"
+                            onClick={() => copyToClipboard(lobbyData.roomCode, 'code')}
+                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-gray-400 hover:text-white hover:bg-white/[0.06] hover:border-white/[0.1] transition-all text-sm font-medium"
+                        >
+                            {copiedField === 'code' ? <><CheckCircle size={16} className="text-neon-green" /> Copied!</> : <><Copy size={16} /> Copy Code</>}
+                        </button>
+
+                        {/* Invite link */}
+                        <div className="flex items-center gap-2 bg-white/[0.03] rounded-xl px-4 py-2.5 border border-white/[0.04] cursor-pointer hover:border-neon-blue/30 transition-colors" onClick={() => copyToClipboard(inviteLink, 'link')}>
+                            <LinkIcon size={14} className="text-neon-blue shrink-0" />
+                            <span className="text-xs text-gray-400 truncate flex-1">{inviteLink}</span>
+                            <span className="text-[10px] font-bold text-gray-500 uppercase shrink-0">Copy</span>
+                        </div>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Main Content */}
+                <div className="flex-1 mx-4 sm:mx-auto sm:w-full sm:max-w-lg mt-4 space-y-4">
                     {/* Players */}
-                    <div className="bg-[#12121b] p-5 rounded-2xl border border-white/[0.06] flex flex-col">
-                        <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/[0.06]">
+                    <div className="bg-[#12121b] rounded-2xl border border-white/[0.06] p-5">
+                        <div className="flex items-center justify-between mb-4">
                             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                                <Users size={16} /> Roster ({players.length})
+                                <Users size={16} /> Players
                             </h3>
-                            {lobbyData.host === currentUsername && (
-                                <span className="text-[10px] font-bold bg-neon-purple/10 text-neon-purple px-2 py-0.5 rounded border border-neon-purple/20">HOST</span>
-                            )}
-                        </div>
-                        <div className="space-y-2 overflow-y-auto flex-1">
-                            {players.map(player => (
-                                <div key={player.username} className="flex justify-between items-center p-3 bg-white/[0.02] rounded-xl border border-white/[0.04] hover:border-white/[0.08] transition-colors">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-2.5 h-2.5 rounded-full ${player.isHost ? 'bg-neon-purple shadow-[0_0_10px_#bc13fe]' : 'bg-neon-green shadow-[0_0_8px_#39ff14]'}`}></div>
-                                        <span className="text-white font-bold tracking-wide text-sm">{player.username}</span>
+                            <div className="flex -space-x-1.5">
+                                {players.slice(0, 5).map(p => (
+                                    <div key={p.username} className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-[#12121b] ${p.username === lobbyData.host ? 'bg-neon-purple/20 text-neon-purple' : 'bg-neon-green/20 text-neon-green'}`}>
+                                        {p.username?.charAt(0).toUpperCase()}
                                     </div>
-                                    {player.username === currentUsername && <span className="text-[10px] bg-white/[0.06] text-gray-400 px-1.5 py-0.5 rounded font-mono">YOU</span>}
+                                ))}
+                                {players.length > 5 && <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-[#12121b] bg-white/[0.06] text-gray-400">+{players.length - 5}</div>}
+                            </div>
+                        </div>
+                        <div className="space-y-1.5">
+                            {players.map(player => (
+                                <div key={player.username} className="flex items-center justify-between p-2.5 rounded-xl hover:bg-white/[0.02] transition-colors">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border ${player.username === lobbyData.host ? 'bg-neon-purple/10 border-neon-purple/20 text-neon-purple' : 'bg-neon-green/10 border-neon-green/20 text-neon-green'}`}>
+                                            {player.username?.charAt(0).toUpperCase()}
+                                        </div>
+                                        <span className="text-white font-medium text-sm">{player.username}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {player.username === currentUsername && <span className="text-[10px] bg-white/[0.06] text-gray-400 px-1.5 py-0.5 rounded font-mono">YOU</span>}
+                                        {player.username === lobbyData.host && <span className="text-[10px] bg-neon-purple/10 text-neon-purple px-1.5 py-0.5 rounded font-medium">HOST</span>}
+                                    </div>
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    {/* Invite */}
-                    <div className="bg-[#12121b] p-5 rounded-2xl border border-white/[0.06] flex flex-col items-center">
-                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 w-full justify-center border-b border-white/[0.06] pb-4 mb-4">
-                            <Share2 size={16} /> Scan to Join
-                        </h3>
-
-                        <div className="flex-1 flex items-center justify-center py-2">
-                            <div className="p-4 bg-white rounded-2xl shadow-xl">
-                                <QRCodeSVG value={inviteLink} size={140} level={"H"} />
-                            </div>
-                        </div>
-
-                        <div className="w-full space-y-3 mt-4">
-                            <div className="flex items-center gap-2 bg-white/[0.03] p-1.5 pr-3 rounded-xl border border-white/[0.06] group hover:border-neon-blue/30 transition-colors">
-                                <div className="bg-white/[0.05] px-4 py-2 rounded-lg text-neon-green font-mono font-bold text-2xl tracking-widest border border-white/[0.06]">
-                                    {lobbyData.roomCode}
-                                </div>
-                                <div className="flex-1 text-left pl-2">
-                                    <div className="text-[10px] text-gray-500 font-bold uppercase">Room Code</div>
-                                </div>
-                                <Button onClick={() => copyToClipboard(lobbyData.roomCode, 'code')} variant="ghost" size="icon" className="text-gray-400 hover:text-white hover:bg-white/10">
-                                    {copiedField === 'code' ? <CheckCircle size={18} className="text-neon-green" /> : <Copy size={18} />}
-                                </Button>
-                            </div>
-
-                            <div className="flex items-center gap-2 bg-white/[0.03] p-2 rounded-xl border border-white/[0.06] cursor-pointer group hover:border-neon-blue/30 transition-colors" onClick={() => copyToClipboard(inviteLink, 'link')}>
-                                <div className="bg-white/[0.05] p-2 rounded-lg text-neon-blue border border-white/[0.06]"><LinkIcon size={16} /></div>
-                                <div className="flex-1 text-left overflow-hidden">
-                                    <div className="text-[10px] text-gray-500 font-bold uppercase">Direct Link</div>
-                                    <div className="text-xs text-gray-400 truncate w-full opacity-60">{inviteLink}</div>
-                                </div>
-                                <Button variant="ghost" size="icon" className="text-gray-400 hover:text-white hover:bg-white/10">
-                                    {copiedField === 'link' ? <CheckCircle size={18} className="text-neon-green" /> : <Copy size={18} />}
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Chat */}
-                <div className="bg-[#12121b] rounded-2xl border border-white/[0.06] flex flex-col h-[300px]">
-                    <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 p-4 border-b border-white/[0.06]">
-                        <MessageCircle size={16} /> Lobby Chat
-                    </h3>
-                    <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                        {chatMessages.length === 0 ? (
-                            <p className="text-gray-600 text-sm text-center mt-8">No messages yet. Say hi!</p>
-                        ) : (
-                            chatMessages.map((msg, i) => (
-                                <div key={i} className="text-sm">
-                                    <span className={`font-bold ${msg.username === currentUsername ? 'text-neon-blue' : 'text-neon-purple'}`}>
-                                        {msg.username}:
-                                    </span>
-                                    <span className="text-gray-300 ml-2">{msg.message}</span>
-                                </div>
-                            ))
-                        )}
-                        <div ref={chatEndRef} />
-                    </div>
-                    <form onSubmit={sendChat} className="p-3 border-t border-white/[0.06] flex gap-2">
-                        <input
-                            value={chatInput}
-                            onChange={(e) => setChatInput(e.target.value)}
-                            placeholder="Type a message..."
-                            className="flex-1 bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-2.5 text-white text-sm focus:border-neon-blue outline-none transition"
-                        />
-                        <Button type="submit" variant="primary" size="sm">Send</Button>
-                    </form>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center justify-between gap-4 pt-2">
-                    <Button type="button" onClick={leaveRoom} variant="ghost" className="text-red-400 hover:bg-red-500/10 border border-red-500/20 px-5">
-                        Leave Room
-                    </Button>
-                    {lobbyData.host === currentUsername ? (
-                        <Button onClick={handleStartGame} variant="success" className="px-8 h-12 text-base font-bold shadow-[0_0_20px_rgba(57,255,20,0.2)]">
-                            Start Game <ArrowRight className="ml-2" />
-                        </Button>
-                    ) : (
-                        <div className="flex items-center gap-2 px-5 py-3 bg-white/[0.03] rounded-xl border border-white/[0.06]">
-                            <Loader className="animate-spin text-neon-blue" size={18} />
-                            <span className="text-sm font-bold text-gray-300">Waiting for Host...</span>
+                    {/* Quiz Selection (Host Only) */}
+                    {isHost && (
+                        <div className="bg-[#12121b] rounded-2xl border border-white/[0.06] p-5 space-y-3">
+                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Quiz Material</label>
+                            {quizzesLoading ? (
+                                <div className="h-12 bg-white/[0.04] rounded-xl animate-pulse" />
+                            ) : (
+                                <select
+                                    value={lobbyData.quizId || ''}
+                                    onChange={handleChangeQuiz}
+                                    className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-white focus:border-neon-blue outline-none cursor-pointer text-sm appearance-none transition font-medium"
+                                >
+                                    {availableQuizzes.map(quiz => (
+                                        <option key={quiz.id} value={String(quiz.id)} className="bg-[#1a1a2e]">{quiz.title} • {quiz.difficulty}</option>
+                                    ))}
+                                </select>
+                            )}
                         </div>
                     )}
+
+                    {/* Chat */}
+                    <div className="bg-[#12121b] rounded-2xl border border-white/[0.06] flex flex-col h-[280px]">
+                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 p-4 border-b border-white/[0.06]">
+                            <MessageCircle size={16} /> Chat
+                        </h3>
+                        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                            {chatMessages.length === 0 ? (
+                                <p className="text-gray-600 text-sm text-center mt-8">No messages yet. Say hi!</p>
+                            ) : (
+                                chatMessages.map((msg, i) => (
+                                    <div key={i} className="text-sm">
+                                        <span className={`font-bold ${msg.username === currentUsername ? 'text-neon-blue' : 'text-neon-purple'}`}>{msg.username}: </span>
+                                        <span className="text-gray-300">{msg.message}</span>
+                                    </div>
+                                ))
+                            )}
+                            <div ref={chatEndRef} />
+                        </div>
+                        <form onSubmit={sendChat} className="p-3 border-t border-white/[0.06] flex gap-2">
+                            <input
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                placeholder="Type a message..."
+                                className="flex-1 bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-2.5 text-white text-sm focus:border-neon-blue outline-none transition"
+                            />
+                            <Button type="submit" variant="primary" size="sm">Send</Button>
+                        </form>
+                    </div>
+                </div>
+
+                {/* Bottom Actions */}
+                <div className="mx-4 sm:mx-auto sm:w-full sm:max-w-lg py-5">
+                    <div className="flex items-center gap-3">
+                        <Button onClick={leaveRoom} variant="outline" className="flex-1 h-12 text-sm font-bold border-white/[0.08] text-gray-400 hover:text-white hover:bg-white/[0.03]">
+                            Leave
+                        </Button>
+                        {isHost ? (
+                            <Button onClick={handleStartGame} variant="success" className="flex-[2] h-12 text-base font-bold shadow-[0_0_20px_rgba(57,255,20,0.2)]">
+                                Start Game <ArrowRight className="ml-2" />
+                            </Button>
+                        ) : (
+                            <div className="flex-[2] flex items-center justify-center gap-2 h-12 bg-white/[0.03] rounded-xl border border-white/[0.06]">
+                                <Loader className="animate-spin text-neon-blue" size={18} />
+                                <span className="text-sm font-bold text-gray-300">Waiting for host...</span>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         );
@@ -761,17 +805,19 @@ export default function Multiplayer() {
         if (countdown <= 0) colorClass = "text-neon-green";
 
         return (
-            <div className="flex flex-col items-center justify-center min-h-[50vh] animate-fade-in py-10">
-                <h3 className="text-gray-500 font-bold uppercase tracking-[0.5em] mb-12 animate-pulse">Get Ready</h3>
-                <div className="relative flex items-center justify-center">
-                    <div className={`absolute w-64 h-64 rounded-full blur-3xl opacity-20 transition-colors duration-300 ${colorClass.replace('text-', 'bg-')}`}></div>
-                    <span className={`text-[10rem] sm:text-[12rem] font-mono font-black leading-none transition-all duration-300 ${colorClass} drop-shadow-2xl`}>
-                        {countdown > 0 ? countdown : 'GO!'}
-                    </span>
-                </div>
-                <div className="mt-16 text-center space-y-3">
-                    <span className="text-neon-blue text-xs font-bold uppercase tracking-wider bg-neon-blue/10 px-3 py-1 rounded-md border border-neon-blue/20">Next Up</span>
-                    <h2 className="text-xl sm:text-2xl font-bold text-white max-w-lg leading-tight">{lobbyData.quizTitle}</h2>
+            <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] -mt-10 animate-fade-in px-4">
+                <div className="text-center space-y-16">
+                    <div className="relative flex items-center justify-center">
+                        <div className={`absolute w-48 h-48 sm:w-64 sm:h-64 rounded-full blur-3xl opacity-20 transition-colors duration-300 ${colorClass.replace('text-', 'bg-')}`}></div>
+                        <span className={`text-[8rem] sm:text-[12rem] font-mono font-black leading-none transition-all duration-300 ${colorClass} drop-shadow-2xl`}>
+                            {countdown > 0 ? countdown : 'GO!'}
+                        </span>
+                    </div>
+
+                    <div className="space-y-2">
+                        <p className="text-gray-500 text-xs font-bold uppercase tracking-[0.3em]">Next Up</p>
+                        <h2 className="text-lg sm:text-xl font-bold text-white">{lobbyData.quizTitle}</h2>
+                    </div>
                 </div>
             </div>
         );
@@ -994,7 +1040,8 @@ export default function Multiplayer() {
                 )}
 
                 <div className="flex gap-3">
-                    <Button onClick={leaveRoom} variant="outline" fullWidth className="h-12 font-bold border-white/[0.08] text-gray-400 hover:text-white hover:bg-white/[0.03]">Return to Menu</Button>
+                    <Button onClick={backToLobby} variant="primary" fullWidth className="h-12 font-bold">Return to Lobby</Button>
+                    <Button onClick={leaveRoom} variant="outline" fullWidth className="h-12 font-bold border-white/[0.08] text-gray-400 hover:text-white hover:bg-white/[0.03]">Leave</Button>
                 </div>
             </div>
         );
