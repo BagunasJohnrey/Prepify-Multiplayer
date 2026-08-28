@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, LogOut, User, Users, History, Bookmark, Trophy, Gamepad2, BookOpen } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -6,11 +6,29 @@ import Button from '../components/ui/Button';
 
 export default function Navbar({ onOpenLogout }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const { user } = useAuth();
   const location = useLocation();
 
   const handleLogout = () => onOpenLogout();
-  const handleMobileLogout = () => { setIsOpen(false); onOpenLogout(); };
+  const handleMobileLogout = () => { closeDrawer(); onOpenLogout(); };
+
+  const closeDrawer = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsOpen(false);
+      setIsClosing(false);
+    }, 250);
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen]);
 
   const isActive = (path) => location.pathname === path;
 
@@ -155,7 +173,7 @@ export default function Navbar({ onOpenLogout }) {
           </div>
 
           {/* Mobile Menu Button */}
-          <Button className="lg:hidden text-gray-300 hover:text-white" variant="ghost" size="icon" onClick={() => setIsOpen(!isOpen)}>
+          <Button className="lg:hidden text-gray-300 hover:text-white" variant="ghost" size="icon" onClick={() => isOpen ? closeDrawer() : setIsOpen(true)}>
             {isOpen ? <X size={22} /> : <Menu size={22} />}
           </Button>
         </div>
@@ -165,21 +183,21 @@ export default function Navbar({ onOpenLogout }) {
       {isOpen && (
         <>
           <div
-            className="lg:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm animate-fade-in"
-            onClick={() => setIsOpen(false)}
+            className={`lg:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm transition-opacity duration-250 ${isClosing ? 'opacity-0' : 'opacity-100'}`}
+            onClick={closeDrawer}
           />
-          <div className="lg:hidden fixed top-0 right-0 z-50 w-72 h-full bg-[#12121b] border-l border-white/[0.06] shadow-2xl animate-slide-in-right overflow-y-auto">
+          <div className={`lg:hidden fixed top-0 right-0 z-50 w-72 h-full bg-[#12121b] border-l border-white/[0.06] shadow-2xl overflow-y-auto transition-transform duration-250 ease-out ${isClosing ? 'translate-x-full' : 'translate-x-0'}`}>
             <div className="p-5 border-b border-white/[0.06]">
               <div className="flex items-center justify-between">
                 <span className="logo-font text-lg font-black text-white">
                   <span className="text-neon-blue">PREP</span>IFY
                 </span>
-                <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white w-9 h-9">
+                <Button variant="ghost" size="icon" onClick={closeDrawer} className="text-gray-400 hover:text-white w-9 h-9">
                   <X size={20} />
                 </Button>
               </div>
               {user && (
-                <Link to="/profile" onClick={() => setIsOpen(false)} className="mt-4 flex items-center gap-3 p-3 bg-white/[0.03] rounded-xl border border-white/[0.06] hover:bg-white/[0.05] transition">
+                <Link to="/profile" onClick={closeDrawer} className="mt-4 flex items-center gap-3 p-3 bg-white/[0.03] rounded-xl border border-white/[0.06] hover:bg-white/[0.05] transition">
                   <div className="w-10 h-10 rounded-xl border border-white/[0.08] bg-[#12121b] flex items-center justify-center overflow-hidden">
                     {user.avatar_url ? (
                       <img src={user.avatar_url} alt={user.username} className="w-full h-full object-cover" />
@@ -204,7 +222,7 @@ export default function Navbar({ onOpenLogout }) {
                     <Link
                       key={link.to}
                       to={link.to}
-                      onClick={() => setIsOpen(false)}
+                      onClick={closeDrawer}
                       className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition ${
                         active
                           ? 'bg-neon-blue/10 text-neon-blue border border-neon-blue/20'
@@ -226,10 +244,10 @@ export default function Navbar({ onOpenLogout }) {
                 </Button>
               ) : (
                 <div className="flex flex-col gap-2">
-                  <Link to="/login" onClick={() => setIsOpen(false)} className="text-center text-gray-300 hover:text-white border border-white/[0.08] py-3 rounded-xl text-sm font-bold hover:bg-white/[0.03] transition">
+                  <Link to="/login" onClick={closeDrawer} className="text-center text-gray-300 hover:text-white border border-white/[0.08] py-3 rounded-xl text-sm font-bold hover:bg-white/[0.03] transition">
                     Login
                   </Link>
-                  <Link to="/register" onClick={() => setIsOpen(false)} className="text-center bg-neon-blue text-black py-3 rounded-xl text-sm font-bold hover:bg-[#00d4ff] transition shadow-[0_0_15px_rgba(0,243,255,0.2)]">
+                  <Link to="/register" onClick={closeDrawer} className="text-center bg-neon-blue text-black py-3 rounded-xl text-sm font-bold hover:bg-[#00d4ff] transition shadow-[0_0_15px_rgba(0,243,255,0.2)]">
                     Sign Up
                   </Link>
                 </div>
