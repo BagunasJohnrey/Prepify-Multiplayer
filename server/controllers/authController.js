@@ -5,6 +5,7 @@ import User from "../models/User.js";
 import { calculateHearts } from "../utils/heartSystem.js";
 import { sendMail, emailVerificationTemplate, passwordResetTemplate } from "../utils/mailer.js";
 import { isOnline } from "../utils/presence.js";
+import { logAuthEvent, logSecurityEvent } from "../utils/logger.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -29,6 +30,9 @@ const safeUser = (u) => ({
   profile_complete: !!u.profile_complete,
 });
 
+// Determine if cookie should be secure: true in production, or when req.secure is true (behind proxy)
+const isSecureContext = (req) => process.env.NODE_ENV === 'production' || req.secure;
+
 const setAuthCookie = (res, token, secure) => {
   res.cookie("token", token, {
     httpOnly: true,
@@ -41,8 +45,10 @@ const setAuthCookie = (res, token, secure) => {
 
 export const register = async (req, res) => {
   const { username, password, email } = req.body;
+  const ip = req.ip || req.connection.remoteAddress;
   try {
     if (!username || !password) {
+      logSecurityEvent('registration_failed_missing_fields', { ip, username: username || 'unknown' });
       return res.status(400).json({ error: "Username and password are required." });
     }
     const hash = await bcrypt.hash(password, 10);
@@ -55,9 +61,11 @@ export const register = async (req, res) => {
       await User.setVerificationToken(newUser.id, token, expires);
       await sendMail({ to: email, ...emailVerificationTemplate(token) });
     }
+    logAuthEvent('user_registered', { userId: newUser.id, username, ip });
     res.status(201).json(newUser);
   } catch (err) {
     if (err.code === "23505") {
+      logSecurityEvent('registration_failed_duplicate', { ip, username });
       return res.status(400).json({ error: "Username already exists." });
     }
     console.error("Register error:", err);
@@ -94,6 +102,7 @@ export const resendVerification = async (req, res) => {
 };
 
 export const forgotPassword = async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: "Email required" });
@@ -104,6 +113,9 @@ export const forgotPassword = async (req, res) => {
       const expires = new Date(Date.now() + 60 * 60 * 1000);
       await User.setResetToken(user.id, token, expires);
       await sendMail({ to: email, ...passwordResetTemplate(token) });
+      logAuthEvent('password_reset_requested', { userId: user.id, email, ip });
+    } else {
+      logSecurityEvent('password_reset_requested_unknown_email', { email, ip });
     }
     res.json({ success: true, message: "If that email exists, a reset link was sent." });
   } catch {
@@ -112,14 +124,19 @@ export const forgotPassword = async (req, res) => {
 };
 
 export const resetPassword = async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
   try {
     const { token, password } = req.body;
     if (!token || !password) return res.status(400).json({ error: "Token and password required" });
     const user = await User.findByResetToken(token);
-    if (!user) return res.status(400).json({ error: "Invalid or expired token" });
+    if (!user) {
+      logSecurityEvent('password_reset_failed_invalid_token', { ip });
+      return res.status(400).json({ error: "Invalid or expired token" });
+    }
     const hash = await bcrypt.hash(password, 10);
     await User.updatePassword(user.id, hash);
     await User.clearResetToken(user.id);
+    logAuthEvent('password_reset_completed', { userId: user.id, ip });
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: "Failed to reset password" });
@@ -209,18 +226,26 @@ export const getOnlineFriends = async (req, res) => {
 
 export const login = async (req, res) => {
   const { username, password } = req.body;
+  const ip = req.ip || req.connection.remoteAddress;
   try {
     if (!username || !password) {
+      logSecurityEvent('login_failed_missing_fields', { ip, username: username || 'unknown' });
       return res.status(400).json({ error: "Username and password are required." });
     }
     const user = await User.findByUsername(username);
-    if (!user) return res.status(401).json({ error: "Invalid credentials" });
+    if (!user) {
+      logSecurityEvent('login_failed_user_not_found', { ip, username });
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
     if (!user.password_hash) {
       return res.status(401).json({ error: "This account uses Google Sign-In. Please log in with Google." });
     }
 
     const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) return res.status(401).json({ error: "Invalid credentials" });
+    if (!valid) {
+      logSecurityEvent('login_failed_invalid_password', { ip, username, userId: user.id });
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
 
     // Handle heart logic
     const raw = await User.getRawHearts(user.id);
@@ -233,7 +258,9 @@ export const login = async (req, res) => {
     const streakInfo = await User.updateStreak(user.id);
 
     const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
-    setAuthCookie(res, token, req.secure);
+    setAuthCookie(res, token, isSecureContext(req));
+
+    logAuthEvent('user_login', { userId: user.id, username, ip, streak: streakInfo?.streak });
 
     res.json({ 
         user: safeUser({ ...user, hearts: stats.hearts, last_heart_update: new Date(stats.lastMs), login_streak: streakInfo?.streak, longest_streak: streakInfo?.longest }),
@@ -350,6 +377,9 @@ export const logout = (req, res) => {
         secure: req.secure,
         path: "/"
     });
+    if (req.user) {
+        logAuthEvent('user_logout', { userId: req.user.id, ip: req.ip || req.connection.remoteAddress });
+    }
     res.json({ success: true });
 };
 

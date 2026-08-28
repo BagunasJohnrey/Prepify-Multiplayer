@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Bookmark, PlayCircle, Loader, Share2, Trash2, BookOpen } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Bookmark, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
@@ -71,19 +71,17 @@ export default function Bookmarks() {
       <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-3 pb-6 sm:pt-6 sm:pb-10">
         {/* Header */}
         <header className="mb-8">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-neon-blue/10 border border-neon-blue/20 flex items-center justify-center text-neon-blue shadow-[0_0_30px_rgba(0,243,255,0.15)]">
-                <Bookmark size={24} />
-              </div>
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Bookmarked Exams</h1>
-                <p className="text-sm text-gray-400 mt-0.5">Your saved quizzes for quick access</p>
-              </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="p-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Bookmarked Exams</h1>
+              <p className="text-sm text-gray-400 mt-0.5">Your saved quizzes for quick access</p>
             </div>
-            <Button variant="ghost" onClick={() => navigate('/dashboard')} className="border border-white/10 text-gray-300 hover:text-white hover:bg-white/5 w-auto px-4 py-2.5">
-              <ArrowLeft size={20} /> Dashboard
-            </Button>
           </div>
         </header>
 
@@ -117,54 +115,84 @@ export default function Bookmarks() {
               <Button onClick={() => navigate('/dashboard')} variant="primary" className="w-auto px-6">Browse Quizzes</Button>
             </div>
           ) : (
-            <div className="grid gap-3 p-5">
+            <div className="grid gap-2.5 p-3 sm:p-5">
               {quizzes.map((quiz) => (
                 <div key={quiz.id}
                   onClick={() => handleQuizClick(quiz.id)}
-                  className="group bg-[#16161f] p-5 rounded-2xl border border-white/[0.06] hover:border-neon-purple/40 hover:bg-[#1a1a26] transition-all cursor-pointer flex justify-between items-center"
+                  className="group bg-[#16161f] rounded-2xl border border-white/[0.06] hover:border-neon-purple/40 hover:bg-[#1a1a26] transition-all cursor-pointer overflow-hidden"
                 >
-                  <div className="flex-1 mr-4 min-w-0">
-                    <div className="flex items-center gap-3 mb-1.5">
-                      <h3 className="font-semibold text-lg text-white truncate group-hover:text-neon-purple transition">{quiz.title}</h3>
-                      {quiz.items_count && (
-                        <span className="text-[10px] font-bold uppercase tracking-wider bg-white/[0.04] text-gray-400 px-2 py-0.5 rounded border border-white/[0.06]">{quiz.items_count} Qs</span>
-                      )}
+                  {/* Mobile layout */}
+                  <div className="sm:hidden p-4">
+                    <h3 className="font-semibold text-base text-white leading-snug mb-2 group-hover:text-neon-purple transition">{quiz.title}</h3>
+                    <div className="flex items-center gap-2 text-xs text-gray-400 mb-3">
+                      {quiz.items_count && <span className="font-semibold text-gray-300">{quiz.items_count} Qs</span>}
+                      {quiz.items_count && quiz.course && <span className="text-gray-600">·</span>}
+                      {quiz.course && <span>{quiz.course}</span>}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium text-gray-400 bg-white/[0.03] px-2 py-1 rounded-md border border-white/[0.06]">{quiz.course}</span>
-                      <span className={`text-xs font-bold px-2 py-1 rounded-md border border-white/[0.06] bg-white/[0.03] ${quiz.difficulty === 'Hard' ? 'text-rose-400' : quiz.difficulty === 'Medium' ? 'text-yellow-400' : 'text-emerald-400'}`}>{quiz.difficulty || 'Medium'}</span>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg ${quiz.difficulty === 'Hard' ? 'text-rose-400 bg-rose-500/10 border border-rose-500/20' : quiz.difficulty === 'Medium' ? 'text-yellow-400 bg-yellow-500/10 border border-yellow-500/20' : 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20'}`}>{quiz.difficulty || 'Medium'}</span>
+                      <div className="flex items-center gap-1.5">
+                        {user?.role === 'admin' && (
+                          <Button
+                            onClick={(e) => { e.stopPropagation(); setQuizToDelete(quiz.id); }}
+                            variant="ghost"
+                            size="icon"
+                            className="!p-2 text-gray-500 hover:text-rose-500 hover:bg-rose-500/10"
+                            title="Delete Quiz"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        )}
+                        <Button
+                          onClick={(e) => handleBookmark(e, quiz.id)}
+                          variant="ghost"
+                          size="icon"
+                          className="!p-2 text-neon-blue hover:bg-neon-blue/10"
+                          title="Remove bookmark"
+                        >
+                          <Bookmark size={16} fill="currentColor" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    {user?.role === 'admin' && (
-                      <Button 
-                        onClick={(e) => { e.stopPropagation(); setQuizToDelete(quiz.id); }} 
-                        variant="ghost" 
+                  {/* Desktop layout */}
+                  <div className="hidden sm:flex items-center gap-4 p-5">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-1.5">
+                        <h3 className="font-semibold text-lg text-white truncate group-hover:text-neon-purple transition">{quiz.title}</h3>
+                        {quiz.items_count && (
+                          <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider bg-white/[0.04] text-gray-400 px-2 py-0.5 rounded border border-white/[0.06]">{quiz.items_count} Qs</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-medium text-gray-400 bg-white/[0.03] px-2 py-1 rounded-md border border-white/[0.06]">{quiz.course}</span>
+                        <span className={`text-xs font-bold px-2 py-1 rounded-md border border-white/[0.06] bg-white/[0.03] ${quiz.difficulty === 'Hard' ? 'text-rose-400' : quiz.difficulty === 'Medium' ? 'text-yellow-400' : 'text-emerald-400'}`}>{quiz.difficulty || 'Medium'}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {user?.role === 'admin' && (
+                        <Button
+                          onClick={(e) => { e.stopPropagation(); setQuizToDelete(quiz.id); }}
+                          variant="ghost"
+                          size="icon"
+                          className="text-gray-500 hover:text-rose-500 hover:bg-rose-500/10"
+                          title="Delete Quiz"
+                        >
+                          <Trash2 size={18} />
+                        </Button>
+                      )}
+                      <Button
+                        onClick={(e) => handleBookmark(e, quiz.id)}
+                        variant="ghost"
                         size="icon"
-                        className="text-gray-500 hover:text-rose-500 hover:bg-rose-500/10" 
-                        title="Delete Quiz"
+                        className="text-neon-blue hover:bg-neon-blue/10"
+                        title="Remove bookmark"
                       >
-                        <Trash2 size={18} />
+                        <Bookmark size={18} fill="currentColor" />
                       </Button>
-                    )}
-                    <Button 
-                      onClick={(e) => handleBookmark(e, quiz.id)} 
-                      variant="ghost" 
-                      size="icon"
-                      className="text-neon-blue hover:bg-neon-blue/10" 
-                      title="Remove bookmark"
-                    >
-                      <Bookmark size={18} fill="currentColor" />
-                    </Button>
-                    <Button 
-                      variant="primary" 
-                      size="icon"
-                      className="bg-neon-blue text-black hover:bg-[#00d4ff] shadow-[0_0_20px_rgba(0,243,255,0.3)]"
-                      title="Start quiz"
-                    >
-                      <PlayCircle size={22} fill="currentColor" />
-                    </Button>
+                    </div>
                   </div>
                 </div>
               ))}

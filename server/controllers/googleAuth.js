@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import User from "../models/User.js";
+import { logAuthEvent, logSecurityEvent } from "../utils/logger.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -9,6 +10,9 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
 const ALLOWED_REDIRECT_PATHS = ['/dashboard', '/complete-profile'];
+
+// Determine if cookie should be secure: true in production, or when req.secure is true (behind proxy)
+const isSecureContext = (req) => process.env.NODE_ENV === 'production' || req.secure;
 
 const setAuthCookie = (res, token, secure) => {
   res.cookie("token", token, {
@@ -161,7 +165,7 @@ export const googleCallback = async (req, res) => {
 
     // Issue JWT
     const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
-    setAuthCookie(res, token, req.secure);
+    setAuthCookie(res, token, isSecureContext(req));
 
     // Streak + daily bonus XP
     const streakInfo = await User.updateStreak(user.id);
@@ -175,6 +179,13 @@ export const googleCallback = async (req, res) => {
     if (!ALLOWED_REDIRECT_PATHS.includes(redirectTarget)) {
       return res.redirect(`${CLIENT_URL}/login?error=invalid_redirect`);
     }
+
+    logAuthEvent('google_oauth_login', { 
+      userId: user.id, 
+      email: user.email, 
+      isNewUser,
+      ip: req.ip || req.connection.remoteAddress 
+    });
 
     const queryParams = streakInfo && streakInfo.bonusXp > 0
       ? `?streak=${encodeURIComponent(streakInfo.streak)}&bonus=${encodeURIComponent(streakInfo.bonusXp)}`
@@ -193,6 +204,10 @@ export const googleCallback = async (req, res) => {
       </html>
     `);
   } catch (err) {
+    logSecurityEvent('google_oauth_error', { 
+      error: err.message,
+      ip: req.ip || req.connection.remoteAddress 
+    });
     console.error("Google OAuth error:", err);
     res.redirect(`${CLIENT_URL}/login?error=server_error`);
   }

@@ -24,3 +24,8 @@ export function getSocketIds(username) {
   const set = onlineUsers.get(username);
   return set ? Array.from(set) : [];
 }
+
+// Test helper: reset the online users map
+export function __resetPresenceForTesting() {
+  onlineUsers.clear();
+}
