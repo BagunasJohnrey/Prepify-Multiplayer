@@ -1,6 +1,9 @@
 import { beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
-import { GenericContainer, StartedTestContainer, Wait } from 'testcontainers';
 import { Pool } from 'pg';
+
+let GenericContainer: any;
+let Wait: any;
+let StartedTestContainer: any;
 
 // Mock environment variables for tests
 process.env.NODE_ENV = 'test';
@@ -66,6 +69,11 @@ export async function startTestDatabase(): Promise<Pool> {
     testPool = createMockPool();
     return testPool;
   }
+
+  // Dynamically import testcontainers to avoid import-time crashes
+  const tc = await import('testcontainers');
+  GenericContainer = tc.GenericContainer;
+  Wait = tc.Wait;
 
   postgresContainer = await new GenericContainer('postgres:16-alpine')
     .withEnvironment({
