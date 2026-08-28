@@ -40,6 +40,17 @@ async function isDockerAvailable(): Promise<boolean> {
 }
 
 export async function startTestDatabase(): Promise<Pool> {
+  // Reuse existing pool if already connected
+  if (testPool) {
+    try {
+      await testPool.query('SELECT 1');
+      return testPool;
+    } catch {
+      await testPool.end().catch(() => {});
+      testPool = null;
+    }
+  }
+
   // Always try docker-compose postgres first
   const databaseUrl = process.env.TEST_DATABASE_URL || 'postgresql://prepify:prepify@localhost:5432/prepify';
   process.env.DATABASE_URL = databaseUrl;
@@ -48,17 +59,24 @@ export async function startTestDatabase(): Promise<Pool> {
     connectionString: databaseUrl,
     max: 5,
     ssl: false,
-    statement_timeout: 10000,
-    query_timeout: 10000
+    statement_timeout: 30000,
+    query_timeout: 30000,
+    idle_in_transaction_session_timeout: 30000
+  });
+  testPool.on('error', (err) => {
+    console.warn('Pool idle client error:', err.message);
   });
   
   try {
-    await testPool.query('SELECT 1');
-    await runMigrations(testPool);
+    const client = await testPool.connect();
+    await client.query('SELECT 1');
+    client.release();
+    await runMigrationsWithRetry(testPool);
     return testPool;
   } catch (err) {
     console.warn('docker-compose postgres failed, trying testcontainers:', err.message);
     await testPool.end().catch(() => {});
+    testPool = null;
   }
   
   // Fall back to testcontainers
@@ -90,17 +108,26 @@ export async function startTestDatabase(): Promise<Pool> {
 
   const testcontainerUrl = `postgresql://test:test@${host}:${port}/prepify_test`;
   
-  // Update process.env for the application
   process.env.DATABASE_URL = testcontainerUrl;
 
-  // Create a pool for direct database access in tests
   testPool = new Pool({
     connectionString: testcontainerUrl,
-    max: 5
+    max: 5,
+    statement_timeout: 30000,
+    query_timeout: 30000
+  });
+  testPool.on('error', (err) => {
+    console.warn('Testcontainer pool idle client error:', err.message);
   });
 
-  // Run migrations
-  await runMigrations(testPool);
+  try {
+    await runMigrationsWithRetry(testPool);
+  } catch (migrationErr) {
+    console.error('Migration failed after retries:', migrationErr);
+    await testPool.end().catch(() => {});
+    testPool = null;
+    throw migrationErr;
+  }
 
   return testPool;
 }
@@ -113,74 +140,76 @@ function createMockPool() {
   } as any;
 }
 
+const migrations = [
+  `DROP TABLE IF EXISTS results CASCADE;`,
+  `DROP TABLE IF EXISTS quizzes CASCADE;`,
+  `DROP TABLE IF EXISTS users CASCADE;`,
+  `CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255),
+    role VARCHAR(50) DEFAULT 'user',
+    hearts INTEGER DEFAULT 3,
+    xp INTEGER DEFAULT 0,
+    last_heart_update TIMESTAMP DEFAULT NOW(),
+    email VARCHAR(255),
+    avatar_url TEXT,
+    google_id VARCHAR(255) UNIQUE,
+    profile_complete BOOLEAN DEFAULT false,
+    last_login_date DATE,
+    login_streak INTEGER DEFAULT 0,
+    longest_streak INTEGER DEFAULT 0,
+    bookmarked_quizzes INTEGER[] DEFAULT '{}',
+    email_verified BOOLEAN DEFAULT false,
+    email_verification_token VARCHAR(255),
+    email_verification_expires TIMESTAMP,
+    password_reset_token VARCHAR(255),
+    password_reset_expires TIMESTAMP,
+    friends INTEGER[] DEFAULT '{}'
+  );`,
+  `CREATE TABLE quizzes (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    course VARCHAR(100),
+    difficulty VARCHAR(50),
+    description TEXT,
+    questions JSONB NOT NULL,
+    items_count INTEGER,
+    share_id VARCHAR(32) UNIQUE,
+    tags TEXT[] DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT NOW()
+  );`,
+  `CREATE TABLE results (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+    score INTEGER NOT NULL,
+    total_questions INTEGER NOT NULL DEFAULT 0,
+    history JSONB NOT NULL,
+    percentage INTEGER NOT NULL DEFAULT 0,
+    completed_at TIMESTAMP DEFAULT NOW()
+  );`,
+  `CREATE INDEX IF NOT EXISTS idx_results_user_id ON results(user_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_results_completed_at ON results(completed_at DESC);`
+];
+
 /**
- * Run database migrations
+ * Run database migrations with retry logic for CI stability
  */
-async function runMigrations(pool: Pool) {
-  const migrations = [
-    // Drop existing tables to ensure clean schema (test DB only)
-    `DROP TABLE IF EXISTS results CASCADE;`,
-    `DROP TABLE IF EXISTS quizzes CASCADE;`,
-    `DROP TABLE IF EXISTS users CASCADE;`,
-
-    // Users table
-    `CREATE TABLE users (
-      id SERIAL PRIMARY KEY,
-      username VARCHAR(255) UNIQUE NOT NULL,
-      password_hash VARCHAR(255),
-      role VARCHAR(50) DEFAULT 'user',
-      hearts INTEGER DEFAULT 3,
-      xp INTEGER DEFAULT 0,
-      last_heart_update TIMESTAMP DEFAULT NOW(),
-      email VARCHAR(255),
-      avatar_url TEXT,
-      google_id VARCHAR(255) UNIQUE,
-      profile_complete BOOLEAN DEFAULT false,
-      last_login_date DATE,
-      login_streak INTEGER DEFAULT 0,
-      longest_streak INTEGER DEFAULT 0,
-      bookmarked_quizzes INTEGER[] DEFAULT '{}',
-      email_verified BOOLEAN DEFAULT false,
-      email_verification_token VARCHAR(255),
-      email_verification_expires TIMESTAMP,
-      password_reset_token VARCHAR(255),
-      password_reset_expires TIMESTAMP,
-      friends INTEGER[] DEFAULT '{}'
-    );`,
-    
-    // Quizzes table
-    `CREATE TABLE quizzes (
-      id SERIAL PRIMARY KEY,
-      title VARCHAR(255) NOT NULL,
-      course VARCHAR(100),
-      difficulty VARCHAR(50),
-      description TEXT,
-      questions JSONB NOT NULL,
-      items_count INTEGER,
-      share_id VARCHAR(32) UNIQUE,
-      tags TEXT[] DEFAULT '{}',
-      created_at TIMESTAMP DEFAULT NOW()
-    );`,
-    
-    // Results table
-    `CREATE TABLE results (
-      id SERIAL PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
-      score INTEGER NOT NULL,
-      total_questions INTEGER NOT NULL DEFAULT 0,
-      history JSONB NOT NULL,
-      percentage INTEGER NOT NULL DEFAULT 0,
-      completed_at TIMESTAMP DEFAULT NOW()
-    );`,
-    
-    // Indexes
-    `CREATE INDEX IF NOT EXISTS idx_results_user_id ON results(user_id);`,
-    `CREATE INDEX IF NOT EXISTS idx_results_completed_at ON results(completed_at DESC);`
-  ];
-
+async function runMigrationsWithRetry(pool: Pool, maxRetries = 3) {
   for (const migration of migrations) {
-    await pool.query(migration);
+    let retries = 0;
+    while (retries < maxRetries) {
+      try {
+        await pool.query(migration);
+        break;
+      } catch (err: any) {
+        retries++;
+        if (retries >= maxRetries) throw err;
+        console.warn(`Migration retry ${retries}/${maxRetries} (${migration.substring(0, 40)}...):`, err.message);
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retries) * 1000));
+      }
+    }
   }
 }
 
