@@ -69,6 +69,14 @@ export default {
     return rows;
   },
 
+  async getVersion() {
+    const { rows } = await pool.query(
+      "SELECT COUNT(*)::int AS count, COALESCE(EXTRACT(EPOCH FROM MAX(created_at))::bigint, 0) AS latest FROM quizzes"
+    );
+    const { count, latest } = rows[0];
+    return `${count}-${latest}`;
+  },
+
   async findById(id) {
     const { rows } = await pool.query(
       "SELECT id, title, course, difficulty, description, questions, items_count, share_id, tags, created_at FROM quizzes WHERE id = $1",

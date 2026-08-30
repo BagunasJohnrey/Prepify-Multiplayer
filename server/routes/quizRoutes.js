@@ -19,6 +19,7 @@ import {
 const router = express.Router();
 
 router.get("/quizzes", validate(getQuizzesSchema), quizController.getQuizzes);
+router.get("/quizzes/version", quizController.getQuizzesVersion);
 router.get("/tags", quizController.getTags);
 router.get("/quiz/:id", validate(getQuizByIdSchema), quizController.getQuizById);
 router.get("/shared/:shareId", validate(getSharedQuizSchema), quizController.getSharedQuiz);

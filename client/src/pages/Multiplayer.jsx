@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { toastOnce } from '../utils/toast';
 import socket from '../utils/socket';
 import api from '../utils/api';
+import { loadQuizzesWithCache } from '../utils/quizCache';
 import Confetti from 'react-confetti';
 
 const COUNTDOWN_SECONDS = 5;
@@ -105,11 +106,11 @@ export default function Multiplayer() {
     useEffect(() => {
         const fetchQuizzes = async () => {
             try {
-                const { data } = await api.get('/quizzes');
-                setAvailableQuizzes(data);
-                if (data.length > 0) setSelectedQuizId(String(data[0].id));
+                const { data: quizzes } = await loadQuizzesWithCache();
+                setAvailableQuizzes(quizzes);
+                if (quizzes.length > 0) setSelectedQuizId(String(quizzes[0].id));
             } catch {
-                toast.error("Failed to load quizzes.", { duration: 3000 });
+                toastOnce.error("Failed to load quizzes.", { duration: 3000 });
             } finally {
                 setQuizzesLoading(false);
             }
@@ -253,7 +254,7 @@ export default function Multiplayer() {
 
         const handleRoomError = (message) => {
             setIsRoomActionPending(false);
-            toast.error(message, { duration: 3000 });
+            toastOnce.error(message, { duration: 3000 });
             if (stateRef.current.view === 'loading') handleCancel();
         };
 
@@ -303,12 +304,13 @@ export default function Multiplayer() {
 
         setChatMessages([]);
 
+        const emitCreate = () => socket.emit('createRoom', { username: currentUsername, quizId: Number(selectedQuizId) });
         if (!socket.connected) {
             socket.connect();
             socket.once('connect', () => {
                 setView('loading');
                 setIsRoomActionPending(true);
-                socket.emit('createRoom', { username: currentUsername, quizId: selectedQuizId });
+                emitCreate();
             });
             socket.once('connect_error', () => {
                 toastOnce.error("Failed to connect to server. Try again.");
@@ -316,7 +318,7 @@ export default function Multiplayer() {
         } else {
             setView('loading');
             setIsRoomActionPending(true);
-            socket.emit('createRoom', { username: currentUsername, quizId: selectedQuizId });
+            emitCreate();
         }
     };
 

@@ -48,6 +48,15 @@ export const getTags = async (req, res) => {
   }
 };
 
+export const getQuizzesVersion = async (req, res) => {
+  try {
+    const version = await Quiz.getVersion();
+    res.json({ version });
+  } catch {
+    res.status(500).json({ error: "Failed to load quiz version" });
+  }
+};
+
 export const getQuizById = async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.id);

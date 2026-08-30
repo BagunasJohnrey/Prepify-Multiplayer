@@ -235,6 +235,7 @@ export default function Dashboard() {
                   <h1 className="text-lg font-bold text-white truncate leading-tight">{user.username}</h1>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-xs font-bold text-white">{user.hearts}/3</span>
                   {[...Array(3)].map((_, i) => (
                     <Heart key={i} size={16} className={i < user.hearts ? 'text-red-500 fill-red-500' : 'text-gray-700'} />
                   ))}
@@ -311,6 +312,7 @@ export default function Dashboard() {
                     </div>
                   )}
                   <div className="flex items-center gap-0.5 ml-auto">
+                    <span className="text-xs font-bold text-white mr-1">{user.hearts}/3</span>
                     {[...Array(3)].map((_, i) => (
                       <Heart key={i} size={14} className={i < user.hearts ? 'text-red-500 fill-red-500' : 'text-gray-700'} />
                     ))}
@@ -370,6 +372,7 @@ export default function Dashboard() {
 
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1">
+                  <span className="text-sm font-bold text-white mr-0.5">{user.hearts}/3</span>
                   {[...Array(3)].map((_, i) => (
                     <Heart key={i} size={16} className={i < user.hearts ? 'text-red-500 fill-red-500' : 'text-gray-700'} />
                   ))}
