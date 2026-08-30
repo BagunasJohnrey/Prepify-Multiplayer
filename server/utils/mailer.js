@@ -61,7 +61,7 @@ export const emailVerificationTemplate = (token) => {
           <tr>
             <td align="center" style="padding:20px 0 10px;">
               <div style="width:64px;height:64px;border-radius:16px;background:rgba(0,243,255,0.1);display:inline-block;line-height:64px;text-align:center;">
-                <span style="font-size:28px;">&#9993;</span>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00f3ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
               </div>
             </td>
           </tr>
@@ -135,7 +135,7 @@ export const passwordResetTemplate = (token) => {
           <tr>
             <td align="center" style="padding:20px 0 10px;">
               <div style="width:64px;height:64px;border-radius:16px;background:rgba(188,19,254,0.1);display:inline-block;line-height:64px;text-align:center;">
-                <span style="font-size:28px;">&#128274;</span>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#bc13fe" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               </div>
             </td>
           </tr>

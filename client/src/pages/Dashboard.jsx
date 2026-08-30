@@ -10,6 +10,48 @@ import ConfirmationModal from '../components/ui/ConfirmationModal';
 import Button from '../components/ui/Button';
 import socket from '../utils/socket';
 
+function EmailVerificationBanner() {
+  const [cooldown, setCooldown] = useState(0);
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
+
+  const handleResend = async () => {
+    setSending(true);
+    try {
+      await api.post('/auth/resend-verification');
+      toast.success('Verification email sent!');
+      setCooldown(60);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to send email');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 sm:p-4 flex items-center justify-between flex-wrap gap-2">
+      <div className="flex items-center gap-2">
+        <svg className="w-4 h-4 text-yellow-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+        <p className="text-yellow-200 text-xs sm:text-sm">Please verify your email.</p>
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleResend}
+        disabled={cooldown > 0 || sending}
+        className="border-yellow-500/40 text-yellow-300 hover:bg-yellow-500/10 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {sending ? 'Sending...' : cooldown > 0 ? `Resend (${cooldown}s)` : 'Resend'}
+      </Button>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -167,16 +209,7 @@ export default function Dashboard() {
 
           {/* Email Banner */}
           {user.email && !user.email_verified && (
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 sm:p-4 flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <span className="text-yellow-400 text-sm">⚠️</span>
-                <p className="text-yellow-200 text-xs sm:text-sm">Please verify your email.</p>
-              </div>
-              <Button variant="outline" size="sm" onClick={async () => { try { await api.post('/auth/resend-verification'); toast.success('Email sent!'); } catch { toast.error('Failed'); } }}
-                className="border-yellow-500/40 text-yellow-300 hover:bg-yellow-500/10 text-xs">
-                Resend
-              </Button>
-            </div>
+            <EmailVerificationBanner />
           )}
 
           {/* Header */}
