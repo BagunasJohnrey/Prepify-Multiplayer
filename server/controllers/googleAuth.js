@@ -194,12 +194,12 @@ export const googleCallback = async (req, res) => {
     res.send(`
       <!DOCTYPE html>
       <html>
-      <head><title>Signing in...</title></head>
+      <head>
+        <title>Signing in...</title>
+        <meta http-equiv="refresh" content="0;url=${CLIENT_URL + redirectTarget + queryParams}">
+      </head>
       <body>
         <p>Signing you in...</p>
-        <script>
-          window.location.href = ${JSON.stringify(CLIENT_URL + redirectTarget + queryParams)};
-        </script>
       </body>
       </html>
     `);
