@@ -17,9 +17,8 @@ const transporter = process.env.SMTP_HOST
 
 export async function sendMail({ to, subject, html }) {
   if (!transporter) {
-    // Dev fallback: log to console so links are still usable locally
-    console.log(`\n[mail:dev] To: ${to}\n[mail:dev] Subject: ${subject}\n[mail:dev] ${html.replace(/<[^>]+>/g, " ")}\n`);
-    return true;
+    console.warn('[mail:skip] No SMTP_HOST configured — email not sent to:', to);
+    return false;
   }
   try {
     await transporter.sendMail({
@@ -28,9 +27,10 @@ export async function sendMail({ to, subject, html }) {
       subject,
       html,
     });
+    console.log('[mail:sent] To:', to, '| Subject:', subject);
     return true;
   } catch (err) {
-    console.error("sendMail error:", err.message);
+    console.error('[mail:error] To:', to, '| Error:', err.message);
     return false;
   }
 }

@@ -206,6 +206,18 @@ app.use(cors(corsOptions));
 
 app.use(cookieParser());
 
+// Debug: check SMTP config (remove after debugging)
+app.get("/api/debug/smtp", (req, res) => {
+  res.json({
+    SMTP_HOST: process.env.SMTP_HOST || '(not set)',
+    SMTP_PORT: process.env.SMTP_PORT || '(not set)',
+    SMTP_SECURE: process.env.SMTP_SECURE || '(not set)',
+    SMTP_USER: process.env.SMTP_USER || '(not set)',
+    SMTP_PASS: process.env.SMTP_PASS ? '(set)' : '(not set)',
+    SMTP_FROM: process.env.SMTP_FROM || '(not set)',
+  });
+});
+
 // Redis-backed rate limiters
 app.use("/api", apiLimiter);
 

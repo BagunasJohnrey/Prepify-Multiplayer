@@ -104,8 +104,8 @@ export default function CompleteProfile() {
             ))}
           </div>
 
-          <Button type="submit" isLoading={loading} variant="success">
-            <span className="flex items-center gap-2">
+          <Button type="submit" isLoading={loading} variant="success" fullWidth className="h-12">
+            <span className="flex items-center justify-center gap-2">
               Let's Go <ArrowRight size={18} />
             </span>
           </Button>
