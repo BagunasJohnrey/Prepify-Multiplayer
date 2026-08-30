@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, ArrowLeft, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { toastOnce } from '../utils/toast';
 import api from '../utils/api';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
@@ -13,13 +14,13 @@ export default function ForgotPassword() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email) return toast.error('Please enter your email');
+    if (!email) return toastOnce.error('Please enter your email');
     setLoading(true);
     try {
       await api.post('/auth/forgot-password', { email });
       setSent(true);
     } catch {
-      toast.error('Something went wrong. Please try again.');
+      toastOnce.error('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }

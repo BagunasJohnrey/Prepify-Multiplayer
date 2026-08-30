@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Upload, BookOpen, Heart, Loader, Trash2, FileText, Plus, Search, Share2, Bookmark, Layers, Download, Zap, Award, TrendingUp, X, SlidersHorizontal } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { toastOnce } from '../utils/toast';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import StoreModal from '../components/StoreModal';
@@ -24,10 +25,10 @@ function EmailVerificationBanner() {
     setSending(true);
     try {
       await api.post('/auth/resend-verification');
-      toast.success('Verification email sent!');
+      toastOnce.success('Verification email sent!', { id: 'resend-email' });
       setCooldown(60);
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to send email');
+      toastOnce.error(err.response?.data?.error || 'Failed to send email', { id: 'resend-email' });
     } finally {
       setSending(false);
     }
@@ -142,7 +143,7 @@ export default function Dashboard() {
 
   const handleBuyHeart = async () => {
     const COST = 50;
-    if (!user || user.xp < COST) { toast.error("Not enough XP!"); return; }
+    if (!user || user.xp < COST) { toastOnce.error("Not enough XP!"); return; }
     const prev = { ...user };
     setUser({ ...user, hearts: user.hearts + 1, xp: user.xp - COST });
     toast.success("Heart purchased! ❤️ -50 XP");
@@ -151,8 +152,8 @@ export default function Dashboard() {
   };
 
   const handleGenerate = async () => {
-    if (!file) return toast.error("Please upload a PDF file first.");
-    if (!config.customTitle.trim()) return toast.error("Please enter a name for this exam.");
+    if (!file) return toastOnce.error("Please upload a PDF file first.");
+    if (!config.customTitle.trim()) return toastOnce.error("Please enter a name for this exam.");
     setLoading(true);
     setProgress({ current: 1, total: Math.ceil(config.numQuestions / 10) });
     const formData = new FormData();

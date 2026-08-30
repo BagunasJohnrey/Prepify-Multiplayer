@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import toast from 'react-hot-toast'; 
+import toast from 'react-hot-toast';
+import { toastOnce } from '../utils/toast'; 
 import api from '../utils/api'; 
 import { useAuth } from '../context/AuthContext'; 
 import Input from '../components/ui/Input';
@@ -23,7 +24,7 @@ export default function Login() {
       no_user_data: "Could not retrieve user info from Google.",
       server_error: "Server error during Google sign-in.",
     };
-    toast.error(messages[oauthError] || "Google sign-in failed.", { duration: 4000 });
+    toastOnce.error(messages[oauthError] || "Google sign-in failed.", { duration: 4000 });
     window.history.replaceState({}, '', '/login');
   }
 
@@ -48,11 +49,11 @@ export default function Login() {
       navigate('/dashboard');
     } catch (err) {
       if (err.response?.data?.code === "USER_NOT_FOUND") {
-        toast.error("No account found. Redirecting to register...", { duration: 2000 });
+        toastOnce.error("No account found. Redirecting to register...", { duration: 2000 });
         setTimeout(() => navigate(`/register?username=${encodeURIComponent(formData.username)}`), 1500);
         return;
       }
-      toast.error(err.response?.data?.error || "Login failed. Please check your credentials.", { duration: 3000 });
+      toastOnce.error(err.response?.data?.error || "Login failed. Please check your credentials.");
     } finally {
       setLoading(false);
     }

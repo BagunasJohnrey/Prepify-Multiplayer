@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Award, Heart, Star, ArrowLeft, Save, Check, Camera, Loader, LogOut, Shield, Zap, KeyRound } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { toastOnce } from '../utils/toast';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import Input from '../components/ui/Input';
@@ -32,9 +33,8 @@ export default function Profile() {
     setLoading(true);
     setSaved(false);
     if (formData.email && !EMAIL_RE.test(formData.email.trim())) {
-      toast.error("Please enter a valid email address.");
       setLoading(false);
-      return;
+      return toastOnce.error("Please enter a valid email address.");
     }
     try {
       const { data } = await api.put('/auth/profile', formData);
@@ -52,10 +52,10 @@ export default function Profile() {
   const handleChangePassword = async (e) => {
     e.preventDefault();
     if (pwData.newPassword.length < 8) {
-      return toast.error("New password must be at least 8 characters.");
+      return toastOnce.error("New password must be at least 8 characters.");
     }
     if (pwData.newPassword !== pwData.confirm) {
-      return toast.error("New passwords do not match.");
+      return toastOnce.error("New passwords do not match.");
     }
     setChangingPw(true);
     try {
@@ -77,7 +77,7 @@ export default function Profile() {
   const handleAvatarUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) return toast.error("Image must be under 2MB.");
+    if (file.size > 2 * 1024 * 1024) return toastOnce.error("Image must be under 2MB.");
     setUploadingAvatar(true);
     try {
       const fd = new FormData();

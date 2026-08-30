@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import { toastOnce } from '../utils/toast';
 import api from '../utils/api'; 
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
@@ -23,17 +23,17 @@ export default function Register() {
   const handleRegister = async (e) => {
     e.preventDefault();
     if (formData.email && !EMAIL_RE.test(formData.email.trim())) {
-      return toast.error("Please enter a valid email address.", { duration: 3000 });
+      return toastOnce.error("Please enter a valid email address.");
     }
     setLoading(true);
     try {
       await api.post('/auth/register', formData);
       
-      toast.success("Account created! Please log in.", { duration: 3000 });
+      toastOnce.success("Account created! Please log in.");
       
       navigate('/login');
     } catch (err) {
-      toast.error(err.response?.data?.error || "Registration failed. Username may already exist.", { duration: 3000 });
+      toastOnce.error(err.response?.data?.error || "Registration failed. Username may already exist.");
     } finally {
       setLoading(false);
     }

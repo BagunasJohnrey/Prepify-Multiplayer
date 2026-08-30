@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import toast from 'react-hot-toast';
+import { toastOnce } from '../utils/toast';
 import socket from '../utils/socket';
 import api from '../utils/api';
 import Confetti from 'react-confetti';
@@ -288,17 +289,17 @@ export default function Multiplayer() {
 
     const handleGuestEntry = (e) => {
         e.preventDefault();
-        if (!guestName.trim()) return toast.error("Please enter a name.");
+        if (!guestName.trim()) return toastOnce.error("Please enter a name.");
         setIsGuestSetup(true);
         setView('menu');
     };
 
     const handleCreateRoom = (e) => {
         e.preventDefault();
-        if (isRoomActionPending) return toast.error("Already connecting...");
-        if (quizzesLoading || availableQuizzes.length === 0) return toast.error("Please wait for quizzes to load.");
-        if (!currentUsername) return toast.error("Identity error. Please reload.");
-        if (!selectedQuizId) return toast.error("Please select a quiz.");
+        if (isRoomActionPending) return toastOnce.error("Already connecting...");
+        if (quizzesLoading || availableQuizzes.length === 0) return toastOnce.error("Please wait for quizzes to load.");
+        if (!currentUsername) return toastOnce.error("Identity error. Please reload.");
+        if (!selectedQuizId) return toastOnce.error("Please select a quiz.");
 
         setChatMessages([]);
 
@@ -310,7 +311,7 @@ export default function Multiplayer() {
                 socket.emit('createRoom', { username: currentUsername, quizId: selectedQuizId });
             });
             socket.once('connect_error', () => {
-                toast.error("Failed to connect to server. Try again.");
+                toastOnce.error("Failed to connect to server. Try again.");
             });
         } else {
             setView('loading');
@@ -321,9 +322,9 @@ export default function Multiplayer() {
 
     const handleJoinRoom = (e) => {
         e.preventDefault();
-        if (isRoomActionPending) return toast.error("Already connecting...");
+        if (isRoomActionPending) return toastOnce.error("Already connecting...");
         const code = roomCode.toUpperCase();
-        if (!currentUsername || code.length !== 6) return toast.error("Enter a valid 6-letter code and name.");
+        if (!currentUsername || code.length !== 6) return toastOnce.error("Enter a valid 6-letter code and name.");
 
         setChatMessages([]);
         setRoomCode(code);
@@ -337,7 +338,7 @@ export default function Multiplayer() {
                 socket.emit('joinRoom', { roomCode: code, username: currentUsername });
             });
             socket.once('connect_error', () => {
-                toast.error("Failed to connect to server. Try again.");
+                toastOnce.error("Failed to connect to server. Try again.");
                 setView('join');
             });
         } else {
