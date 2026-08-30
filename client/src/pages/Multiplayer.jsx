@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Users, PlusCircle, LogIn, Loader, Clock, Trophy, Zap, AlertCircle, CheckCircle, XCircle, Copy, Link as LinkIcon, ArrowRight, Gamepad2, MessageCircle } from 'lucide-react';
+import { Users, PlusCircle, LogIn, Loader, Clock, Trophy, Zap, AlertCircle, CheckCircle, XCircle, Copy, Link as LinkIcon, ArrowRight, Gamepad2, MessageCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
+import ConfirmationModal from '../components/ui/ConfirmationModal';
 import toast from 'react-hot-toast';
 import { toastOnce } from '../utils/toast';
 import socket from '../utils/socket';
@@ -37,6 +38,7 @@ export default function Multiplayer() {
     const [playerRanking, setPlayerRanking] = useState(null);
     const [isAnswered, setIsAnswered] = useState(false);
     const [showAnswerKey, setShowAnswerKey] = useState(false);
+    const [showExitModal, setShowExitModal] = useState(false);
     const [qAnswer, setQAnswer] = useState(null);
     const [questionResults, setQuestionResults] = useState([]);
 
@@ -370,6 +372,12 @@ export default function Multiplayer() {
         setLobbyData(null);
         setChatMessages([]);
         handleCancel();
+    };
+
+    const confirmExitGame = () => {
+        setShowExitModal(false);
+        stopQuestionTimer();
+        leaveRoom();
     };
 
     const sendChat = (e) => {
@@ -836,7 +844,16 @@ export default function Multiplayer() {
         return (
             <div className="space-y-6 animate-fade-in">
                 <div className="flex justify-between items-center pb-4 border-b border-white/[0.06]">
-                    <h3 className="text-lg font-mono text-gray-400">Q<span className="text-white font-bold">{currentQIndex + 1}</span>/{gameQuestions.length}</h3>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setShowExitModal(true)}
+                            className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-gray-400 hover:text-white hover:bg-white/[0.06] transition"
+                            title="Leave game"
+                        >
+                            <ArrowLeft size={18} />
+                        </button>
+                        <h3 className="text-lg font-mono text-gray-400">Q<span className="text-white font-bold">{currentQIndex + 1}</span>/{gameQuestions.length}</h3>
+                    </div>
                     <div className="flex items-center gap-4 text-white">
                         <span className={`font-bold flex items-center gap-1.5 text-sm ${timeLeft <= 3 ? 'text-red-500 animate-pulse' : 'text-neon-blue'}`}>
                             <Clock size={16} /> {timeLeft > 0 ? timeLeft : 0}s
@@ -1092,6 +1109,18 @@ export default function Multiplayer() {
             <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-3 pb-6 sm:pt-6 sm:pb-10">
                 {renderContent()}
             </div>
+
+            <ConfirmationModal
+                isOpen={showExitModal}
+                onClose={() => setShowExitModal(false)}
+                onConfirm={confirmExitGame}
+                title="Leave Game?"
+                message="You will leave the room and your score will be lost."
+                confirmText="Leave"
+                cancelText="Stay"
+                icon="warning"
+                variant="danger"
+            />
         </div>
     );
 }
