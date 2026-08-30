@@ -23,12 +23,12 @@ export default function CompleteProfile() {
   if (authLoading) return null;
   if (!user) return null;
 
-  const suggestions = [
+  const suggestions = [...new Set([
     user.email?.split('@')[0],
     user.username,
     'quiz_master',
     'study_pro',
-  ].filter(Boolean);
+  ].filter(Boolean))];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -89,19 +89,18 @@ export default function CompleteProfile() {
           {/* Suggestion chips */}
           <div className="flex flex-wrap gap-2">
             {suggestions.map((name) => (
-              <Button
+              <button
                 key={name}
                 type="button"
                 onClick={() => pickSuggestion(name)}
-                variant={username === name ? 'primary' : 'ghost'}
-                size="sm"
-                className={username === name 
-                  ? 'text-neon-blue' 
-                  : 'border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'
-                }
+                className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-all ${
+                  username === name
+                    ? 'bg-neon-blue/20 text-neon-blue border border-neon-blue/40'
+                    : 'bg-white/[0.03] text-gray-400 border border-white/[0.06] hover:border-gray-500 hover:text-white'
+                }`}
               >
                 {name}
-              </Button>
+              </button>
             ))}
           </div>
 
