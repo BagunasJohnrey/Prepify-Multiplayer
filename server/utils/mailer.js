@@ -4,6 +4,8 @@ dotenv.config();
 
 const APP_URL = process.env.CLIENT_URL || "http://localhost:5173";
 
+const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
+
 const transporter = process.env.SMTP_HOST
   ? nodemailer.createTransport({
       host: process.env.SMTP_HOST,
@@ -18,9 +20,47 @@ const transporter = process.env.SMTP_HOST
     })
   : null;
 
+function parseFrom(from) {
+  const match = /^(.*)\s*<(.+)>$/.exec(from);
+  if (match) return { name: match[1].trim(), email: match[2] };
+  return { email: from };
+}
+
+async function sendViaBrevoApi({ to, subject, html }) {
+  const from = parseFrom(process.env.SMTP_FROM || "Prepify <no-reply@prepify.app>");
+  const res = await fetch(BREVO_API_URL, {
+    method: "POST",
+    headers: {
+      "api-key": process.env.BREVO_API_KEY,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify({
+      sender: from,
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Brevo API ${res.status}: ${body}`);
+  }
+}
+
 export async function sendMail({ to, subject, html }) {
+  if (process.env.BREVO_API_KEY) {
+    try {
+      await sendViaBrevoApi({ to, subject, html });
+      console.log('[mail:sent] To:', to, '| Subject:', subject, '| Via: Brevo API');
+      return true;
+    } catch (err) {
+      console.error('[mail:error] To:', to, '| Error:', err.message, '| Via: Brevo API');
+      return false;
+    }
+  }
   if (!transporter) {
-    console.warn('[mail:skip] No SMTP_HOST configured — email not sent to:', to);
+    console.warn('[mail:skip] No BREVO_API_KEY or SMTP_HOST configured — email not sent to:', to);
     return false;
   }
   try {

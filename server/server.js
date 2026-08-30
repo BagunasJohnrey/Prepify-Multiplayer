@@ -209,6 +209,7 @@ app.use(cookieParser());
 // Debug: check SMTP config (remove after debugging)
 app.get("/api/debug/smtp", (req, res) => {
   res.json({
+    BREVO_API_KEY: process.env.BREVO_API_KEY ? '(set)' : '(not set)',
     SMTP_HOST: process.env.SMTP_HOST || '(not set)',
     SMTP_PORT: process.env.SMTP_PORT || '(not set)',
     SMTP_SECURE: process.env.SMTP_SECURE || '(not set)',
