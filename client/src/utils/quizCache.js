@@ -40,13 +40,14 @@ export async function loadQuizzesWithCache() {
   // No cache: must fetch everything
   if (!cached) {
     const { data } = await api.get('/quizzes');
+    const list = Array.isArray(data) ? data : [];
     let version = null;
     try {
       const v = await api.get('/quizzes/version');
       version = v.data?.version;
     } catch { /* version endpoint optional */ }
-    if (version) setCachedQuizzes(data, version);
-    return { quizzes: data, fromCache: false, refreshed: true };
+    if (version) setCachedQuizzes(list, version);
+    return { quizzes: list, fromCache: false, refreshed: true };
   }
 
   // Have cache: verify version cheaply
@@ -57,8 +58,9 @@ export async function loadQuizzesWithCache() {
     }
     // Version changed: refetch full list
     const full = await api.get('/quizzes');
-    setCachedQuizzes(full.data, data.version);
-    return { quizzes: full.data, fromCache: false, refreshed: true };
+    const list = Array.isArray(full.data) ? full.data : [];
+    setCachedQuizzes(list, data.version);
+    return { quizzes: list, fromCache: false, refreshed: true };
   } catch {
     // Version check failed (offline etc.): fall back to cache
     return { quizzes: cached.quizzes, fromCache: true, refreshed: false };

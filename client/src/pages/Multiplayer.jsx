@@ -106,7 +106,8 @@ export default function Multiplayer() {
     useEffect(() => {
         const fetchQuizzes = async () => {
             try {
-                const { data: quizzes } = await loadQuizzesWithCache();
+                const { quizzes } = await loadQuizzesWithCache();
+                if (!Array.isArray(quizzes)) throw new Error('Invalid quiz data');
                 setAvailableQuizzes(quizzes);
                 if (quizzes.length > 0) setSelectedQuizId(String(quizzes[0].id));
             } catch {
