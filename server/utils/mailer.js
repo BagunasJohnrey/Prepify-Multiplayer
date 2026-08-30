@@ -100,17 +100,9 @@ export const emailVerificationTemplate = (token) => {
               <p style="margin:8px 0 0;font-size:11px;color:#6b7280;letter-spacing:3px;text-transform:uppercase;">AI-Powered Exam Prep</p>
             </td>
           </tr>
-          <!-- Icon -->
-          <tr>
-            <td align="center" style="padding:20px 0 10px;">
-              <div style="width:64px;height:64px;border-radius:16px;background:rgba(0,243,255,0.1);display:inline-block;line-height:64px;text-align:center;">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00f3ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
-              </div>
-            </td>
-          </tr>
           <!-- Content -->
           <tr>
-            <td style="padding:10px 40px 30px;text-align:center;">
+            <td style="padding:40px 40px 30px;text-align:center;">
               <h2 style="margin:0 0 16px;font-size:22px;color:#ffffff;">Verify your email</h2>
               <p style="margin:0 0 8px;font-size:15px;color:#9ca3af;line-height:1.6;">Thanks for joining Prepify! Click the button below to confirm your email and unlock all features.</p>
               <p style="margin:0 0 32px;font-size:13px;color:#6b7280;">This link expires in 24 hours.</p>
@@ -174,17 +166,9 @@ export const passwordResetTemplate = (token) => {
               <p style="margin:8px 0 0;font-size:11px;color:#6b7280;letter-spacing:3px;text-transform:uppercase;">AI-Powered Exam Prep</p>
             </td>
           </tr>
-          <!-- Icon -->
-          <tr>
-            <td align="center" style="padding:20px 0 10px;">
-              <div style="width:64px;height:64px;border-radius:16px;background:rgba(188,19,254,0.1);display:inline-block;line-height:64px;text-align:center;">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#bc13fe" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              </div>
-            </td>
-          </tr>
           <!-- Content -->
           <tr>
-            <td style="padding:10px 40px 30px;text-align:center;">
+            <td style="padding:40px 40px 30px;text-align:center;">
               <h2 style="margin:0 0 16px;font-size:22px;color:#ffffff;">Password Reset</h2>
               <p style="margin:0 0 8px;font-size:15px;color:#9ca3af;line-height:1.6;">We received a request to reset your password. Click below to set a new one.</p>
               <p style="margin:0 0 32px;font-size:13px;color:#6b7280;">This link expires in 1 hour.</p>
