@@ -116,9 +116,19 @@ const SOCKET_RATE_WINDOW_MS = 60 * 1000;
 // Apply Redis-backed rate limiter first
 io.use(socketLimiter);
 
-// Socket authentication: required in production, optional in development with strict guest limits
+// Socket authentication FIRST, then rate limit
 io.use((socket, next) => {
-    // Rate limit per IP (in-memory fallback if Redis unavailable)
+    try {
+        const cookies = cookie.parse(socket.handshake.headers.cookie || "");
+        const token = cookies.token || socket.handshake.auth?.token;
+        if (token) {
+            socket.user = jwt.verify(token, JWT_SECRET);
+        }
+    } catch {
+        // Invalid/expired token → treat as guest
+    }
+
+    // Now rate limit AFTER auth status is known
     const ip = socket.handshake.address;
     const now = Date.now();
     const record = socketConnections.get(ip) || { count: 0, guestCount: 0, resetAt: now + SOCKET_RATE_WINDOW_MS };
@@ -130,28 +140,15 @@ io.use((socket, next) => {
     record.count++;
     socketConnections.set(ip, record);
 
-    // Determine max connections based on auth status
     const maxConnections = socket.user ? SOCKET_MAX_CONNECTIONS : SOCKET_MAX_GUEST_CONNECTIONS;
     if (record.count > maxConnections) {
         return next(new Error('Too many connections from this IP'));
     }
 
-    try {
-        const cookies = cookie.parse(socket.handshake.headers.cookie || "");
-        const token = cookies.token || socket.handshake.auth?.token;
-        if (token) {
-            socket.user = jwt.verify(token, JWT_SECRET);
-        }
-    } catch {
-        // Invalid/expired token → treat as guest
-    }
-
-    // In production, require authentication for Socket.IO connections
     const isProduction = process.env.NODE_ENV === 'production';
     const isGuest = !socket.user;
     
     if (isProduction && isGuest) {
-        // Track guest connections per IP for stricter rate limiting
         record.guestCount++;
         if (record.guestCount > SOCKET_MAX_GUEST_CONNECTIONS) {
             return next(new Error('Authentication required for Socket.IO connections'));

@@ -13,12 +13,11 @@ const API_BASE_URL = API_BASE_URL_RAW.endsWith('/')
     : API_BASE_URL_RAW;
 
 const socket = io(API_BASE_URL, {
-    // path: '/socket.io/', // Removed (Relies on server/vercel configuration)
+    // path: '/socket.io/', // Removed (Relies on server/vercel/configuration)
     
     // CHANGED: Prioritize Polling for better stability on serverless hosts
     transports: ['polling', 'websocket'], 
     
-    forceNew: true,
     withCredentials: true,
     
     // Reduced timeout for faster failure/retry
