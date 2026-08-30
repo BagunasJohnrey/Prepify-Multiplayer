@@ -1,11 +1,13 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Award, Heart, Star, ArrowLeft, Save, Check, Camera, Loader, LogOut, Shield, Zap } from 'lucide-react';
+import { User, Award, Heart, Star, ArrowLeft, Save, Check, Camera, Loader, LogOut, Shield, Zap, KeyRound } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export default function Profile() {
   const { user, setUser } = useAuth();
@@ -18,6 +20,8 @@ export default function Profile() {
     username: user?.username || '',
     email: user?.email || '',
   });
+  const [pwData, setPwData] = useState({ currentPassword: '', newPassword: '', confirm: '' });
+  const [changingPw, setChangingPw] = useState(false);
 
   if (!user) return null;
 
@@ -27,6 +31,11 @@ export default function Profile() {
     e.preventDefault();
     setLoading(true);
     setSaved(false);
+    if (formData.email && !EMAIL_RE.test(formData.email.trim())) {
+      toast.error("Please enter a valid email address.");
+      setLoading(false);
+      return;
+    }
     try {
       const { data } = await api.put('/auth/profile', formData);
       setUser(data);
@@ -37,6 +46,29 @@ export default function Profile() {
       toast.error(err.response?.data?.error || "Failed to update profile.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (pwData.newPassword.length < 8) {
+      return toast.error("New password must be at least 8 characters.");
+    }
+    if (pwData.newPassword !== pwData.confirm) {
+      return toast.error("New passwords do not match.");
+    }
+    setChangingPw(true);
+    try {
+      await api.post('/auth/change-password', {
+        currentPassword: pwData.currentPassword,
+        newPassword: pwData.newPassword,
+      });
+      setPwData({ currentPassword: '', newPassword: '', confirm: '' });
+      toast.success("Password changed!");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to change password.");
+    } finally {
+      setChangingPw(false);
     }
   };
 
@@ -176,6 +208,48 @@ export default function Profile() {
             </form>
           </div>
         </div>
+
+        {/* Change Password */}
+        {user.has_password && (
+          <div className="bg-[#12121b] rounded-2xl border border-white/[0.06] overflow-hidden">
+            <div className="p-5 border-b border-white/[0.06]">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-neon-purple/10 rounded-xl border border-neon-purple/20">
+                  <KeyRound className="text-neon-purple" size={18} />
+                </div>
+                <h3 className="text-base font-bold text-white">Change Password</h3>
+              </div>
+            </div>
+            <div className="p-5">
+              <form onSubmit={handleChangePassword} className="space-y-4">
+                <Input
+                  label="Current password"
+                  type="password"
+                  placeholder="Enter current password"
+                  value={pwData.currentPassword}
+                  onChange={(e) => setPwData({ ...pwData, currentPassword: e.target.value })}
+                />
+                <Input
+                  label="New password"
+                  type="password"
+                  placeholder="At least 8 characters"
+                  value={pwData.newPassword}
+                  onChange={(e) => setPwData({ ...pwData, newPassword: e.target.value })}
+                />
+                <Input
+                  label="Confirm new password"
+                  type="password"
+                  placeholder="Repeat new password"
+                  value={pwData.confirm}
+                  onChange={(e) => setPwData({ ...pwData, confirm: e.target.value })}
+                />
+                <Button type="submit" isLoading={changingPw} variant="primary" fullWidth className="h-11">
+                  <KeyRound size={18} /> Update Password
+                </Button>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

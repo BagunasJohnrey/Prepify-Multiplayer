@@ -4,12 +4,15 @@ import { z } from "zod";
  * Validation schemas for all API endpoints
  */
 
+// Shared strict email rule: valid format, trimmed, lowercased
+const emailSchema = z.string().trim().toLowerCase().email().max(255).refine(v => v.length > 0, { message: "Email is required" });
+
 // Auth schemas
 export const registerSchema = z.object({
   body: z.object({
     username: z.string().min(2).max(30).regex(/^[a-zA-Z0-9_-]+$/),
     password: z.string().min(8).max(128),
-    email: z.string().email().optional()
+    email: emailSchema.optional()
   })
 });
 
@@ -30,7 +33,7 @@ export const resendVerificationSchema = z.object({});
 
 export const forgotPasswordSchema = z.object({
   body: z.object({
-    email: z.string().email()
+    email: emailSchema
   })
 });
 
@@ -41,10 +44,17 @@ export const resetPasswordSchema = z.object({
   })
 });
 
+export const changePasswordSchema = z.object({
+  body: z.object({
+    currentPassword: z.string().min(1),
+    newPassword: z.string().min(8).max(128)
+  })
+});
+
 export const updateProfileSchema = z.object({
   body: z.object({
     username: z.string().min(2).max(30).regex(/^[a-zA-Z0-9_-]+$/).optional(),
-    email: z.string().email().optional()
+    email: emailSchema.optional()
   }).refine(data => data.username || data.email, {
     message: "At least one field (username or email) is required"
   })

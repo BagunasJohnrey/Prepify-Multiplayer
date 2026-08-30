@@ -167,6 +167,31 @@ export const resetPassword = async (req, res) => {
   }
 };
 
+export const changePassword = async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!user.password_hash) {
+      return res.status(400).json({ error: "This account uses Google Sign-In and has no password set." });
+    }
+
+    const valid = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!valid) {
+      logSecurityEvent('change_password_failed_wrong_current', { userId: user.id, ip });
+      return res.status(401).json({ error: "Current password is incorrect" });
+    }
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await User.updatePassword(user.id, hash);
+    logAuthEvent('password_changed', { userId: user.id, ip });
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Failed to change password" });
+  }
+};
+
 export const getLeaderboard = async (req, res) => {
   try {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));

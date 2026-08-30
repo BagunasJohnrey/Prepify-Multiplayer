@@ -6,6 +6,8 @@ import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 import { User, Mail, Lock, ArrowRight } from 'lucide-react';
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
 export default function Register() {
   const [searchParams] = useSearchParams();
   const prefillUsername = searchParams.get('username') || '';
@@ -20,6 +22,9 @@ export default function Register() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
+    if (formData.email && !EMAIL_RE.test(formData.email.trim())) {
+      return toast.error("Please enter a valid email address.", { duration: 3000 });
+    }
     setLoading(true);
     try {
       await api.post('/auth/register', formData);

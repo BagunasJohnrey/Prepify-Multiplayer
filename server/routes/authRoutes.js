@@ -10,6 +10,7 @@ import {
   resendVerificationSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  changePasswordSchema,
   updateProfileSchema,
   completeProfileSchema,
   addFriendSchema,
@@ -62,6 +63,7 @@ router.post("/verify-email", validate(verifyEmailSchema), authController.verifyE
 router.post("/resend-verification", verifyToken, validate(resendVerificationSchema), authController.resendVerification);
 router.post("/forgot-password", validate(forgotPasswordSchema), authController.forgotPassword);
 router.post("/reset-password", validate(resetPasswordSchema), authController.resetPassword);
+router.post("/change-password", verifyToken, validate(changePasswordSchema), authController.changePassword);
 router.get("/leaderboard", verifyToken, validate(getLeaderboardSchema), authController.getLeaderboard);
 router.get("/leaderboard/:quizId", validate(getQuizLeaderboardSchema), authController.getQuizLeaderboard);
 router.get("/friends", verifyToken, authController.getFriends);
