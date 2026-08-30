@@ -12,6 +12,9 @@ const transporter = process.env.SMTP_HOST
       auth: process.env.SMTP_USER
         ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
         : undefined,
+      connectionTimeout: 20000,
+      greetingTimeout: 20000,
+      socketTimeout: 30000,
     })
   : null;
 
@@ -30,7 +33,7 @@ export async function sendMail({ to, subject, html }) {
     console.log('[mail:sent] To:', to, '| Subject:', subject);
     return true;
   } catch (err) {
-    console.error('[mail:error] To:', to, '| Error:', err.message);
+    console.error('[mail:error] To:', to, '| Error:', err.message, '| Code:', err.code, '| Command:', err.command || '(none)');
     return false;
   }
 }
