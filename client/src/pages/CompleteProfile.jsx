@@ -55,13 +55,26 @@ export default function CompleteProfile() {
     <div className="min-h-screen flex items-center justify-center bg-dark-bg p-4">
       <div className="bg-dark-surface p-8 rounded-3xl border border-gray-800 w-full max-w-md shadow-2xl">
         <div className="text-center mb-8">
-          <div className="bg-neon-blue/10 p-4 rounded-full w-fit mx-auto mb-4">
-            <Sparkles className="text-neon-blue" size={32} />
-          </div>
+          {user.avatar_url ? (
+            <img 
+              src={user.avatar_url} 
+              alt="Google profile" 
+              className="w-20 h-20 rounded-full mx-auto mb-4 border-2 border-neon-blue/30"
+            />
+          ) : (
+            <div className="bg-neon-blue/10 p-4 rounded-full w-fit mx-auto mb-4">
+              <Sparkles className="text-neon-blue" size={32} />
+            </div>
+          )}
           <h1 className="text-3xl font-black text-white mb-2">Choose Your Name</h1>
           <p className="text-gray-400 text-sm">
             Pick a username that other players will see in multiplayer.
           </p>
+          {user.email && (
+            <p className="text-gray-500 text-xs mt-2">
+              Signed in as <span className="text-gray-400">{user.email}</span>
+            </p>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">

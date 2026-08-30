@@ -47,6 +47,11 @@ export default function Login() {
       }
       navigate('/dashboard');
     } catch (err) {
+      if (err.response?.data?.code === "USER_NOT_FOUND") {
+        toast.error("No account found. Redirecting to register...", { duration: 2000 });
+        setTimeout(() => navigate(`/register?username=${encodeURIComponent(formData.username)}`), 1500);
+        return;
+      }
       toast.error(err.response?.data?.error || "Login failed. Please check your credentials.", { duration: 3000 });
     } finally {
       setLoading(false);

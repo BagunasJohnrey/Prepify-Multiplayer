@@ -235,7 +235,7 @@ export const login = async (req, res) => {
     const user = await User.findByUsername(username);
     if (!user) {
       logSecurityEvent('login_failed_user_not_found', { ip, username });
-      return res.status(401).json({ error: "Invalid credentials" });
+      return res.status(401).json({ error: "No account found with that username. Please register first.", code: "USER_NOT_FOUND" });
     }
     if (!user.password_hash) {
       return res.status(401).json({ error: "This account uses Google Sign-In. Please log in with Google." });

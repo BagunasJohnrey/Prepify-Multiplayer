@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../utils/api'; 
 import Input from '../components/ui/Input';
@@ -7,7 +7,9 @@ import Button from '../components/ui/Button';
 import { User, Mail, Lock, ArrowRight } from 'lucide-react';
 
 export default function Register() {
-  const [formData, setFormData] = useState({ username: '', password: '', email: '' });
+  const [searchParams] = useSearchParams();
+  const prefillUsername = searchParams.get('username') || '';
+  const [formData, setFormData] = useState({ username: prefillUsername, password: '', email: '' });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
