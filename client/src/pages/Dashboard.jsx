@@ -241,6 +241,9 @@ export default function Dashboard() {
                   {[...Array(3)].map((_, i) => (
                     <Heart key={i} size={16} className={i < user.hearts ? 'text-red-500 fill-red-500' : 'text-gray-700'} />
                   ))}
+                  {user.hearts < 3 && timeUntilRegen && (
+                    <span className="text-[10px] text-neon-blue font-mono font-bold animate-pulse">{formatTime(timeUntilRegen)}</span>
+                  )}
                   <button onClick={() => setShowStore(true)} className="ml-1 w-6 h-6 rounded-full bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/[0.08] transition">
                     <Plus size={12} />
                   </button>
@@ -318,6 +321,9 @@ export default function Dashboard() {
                     {[...Array(3)].map((_, i) => (
                       <Heart key={i} size={14} className={i < user.hearts ? 'text-red-500 fill-red-500' : 'text-gray-700'} />
                     ))}
+                    {user.hearts < 3 && timeUntilRegen && (
+                      <span className="text-[10px] text-neon-blue font-mono font-bold animate-pulse ml-1">{formatTime(timeUntilRegen)}</span>
+                    )}
                     <button onClick={() => setShowStore(true)} className="ml-1 w-5 h-5 rounded-full bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-gray-400 hover:text-white transition">
                       <Plus size={10} />
                     </button>
