@@ -93,14 +93,12 @@ const tryProvider = async (name, key, models, callFn, prompt) => {
   if (!key) throw new Error(`Missing ${name} API key`);
   if (deadProviders.has(name)) throw new Error(`${name} unavailable (cached)`);
 
-  console.log(`>> Trying ${name}...`);
   let lastError;
   let allModelNotFound = true;
 
   for (const model of models) {
     try {
       const questions = await callFn(prompt, model);
-      console.log(`>> Success with ${name} (${model})!`);
       return questions;
     } catch (err) {
       if (!/model_not_found|does not exist or you do not have access/i.test(err.message)) {
@@ -112,7 +110,6 @@ const tryProvider = async (name, key, models, callFn, prompt) => {
 
   if (allModelNotFound) {
     deadProviders.add(name);
-    console.log(`>> ${name}: no accessible models — skipped (set ${name.toUpperCase()}_MODELS to enable)`);
   } else {
     console.warn(`>> ${name} failed: ${lastError?.message || "all models failed"}`);
   }

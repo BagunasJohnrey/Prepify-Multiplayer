@@ -1,7 +1,11 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import User from "../models/User.js";
 import { calculateHearts } from "../utils/heartSystem.js";
+import { sendMail, emailVerificationTemplate, passwordResetTemplate } from "../utils/mailer.js";
+import { isOnline } from "../utils/presence.js";
+import { logAuthEvent, logSecurityEvent } from "../utils/logger.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -16,11 +20,18 @@ const safeUser = (u) => ({
   hearts: u.hearts,
   xp: u.xp || 0,
   last_heart_update: u.last_heart_update,
+  login_streak: u.login_streak || 0,
+  longest_streak: u.longest_streak || 0,
+  bookmarked_quizzes: u.bookmarked_quizzes || [],
   role: u.role,
   has_password: !!u.password_hash,
   has_google: !!u.google_id,
+  email_verified: !!u.email_verified,
   profile_complete: !!u.profile_complete,
 });
+
+// Determine if cookie should be secure: true in production, or when req.secure is true (behind proxy)
+const isSecureContext = (req) => process.env.NODE_ENV === 'production' || req.secure;
 
 const setAuthCookie = (res, token, secure) => {
   res.cookie("token", token, {
@@ -34,51 +45,229 @@ const setAuthCookie = (res, token, secure) => {
 
 export const register = async (req, res) => {
   const { username, password, email } = req.body;
+  const ip = req.ip || req.connection.remoteAddress;
   try {
     if (!username || !password) {
+      logSecurityEvent('registration_failed_missing_fields', { ip, username: username || 'unknown' });
       return res.status(400).json({ error: "Username and password are required." });
     }
     const hash = await bcrypt.hash(password, 10);
     const newUser = await User.create(username, hash);
     if (email) {
       await User.updateProfile(newUser.id, { email });
+      // Send verification email
+      const token = crypto.randomBytes(32).toString("hex");
+      const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await User.setVerificationToken(newUser.id, token, expires);
+      await sendMail({ to: email, ...emailVerificationTemplate(token) });
     }
-    res.json(newUser);
+    logAuthEvent('user_registered', { userId: newUser.id, username, ip });
+    res.status(201).json(newUser);
   } catch (err) {
-    res.status(400).json({ error: "Username likely already exists." });
+    if (err.code === "23505") {
+      logSecurityEvent('registration_failed_duplicate', { ip, username });
+      return res.status(400).json({ error: "Username already exists." });
+    }
+    console.error("Register error:", err);
+    res.status(500).json({ error: "Registration failed. Please try again." });
+  }
+};
+
+export const verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: "Token required" });
+    const user = await User.findByVerificationToken(token);
+    if (!user) return res.status(400).json({ error: "Invalid or expired token" });
+    await User.markEmailVerified(user.id);
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Failed to verify email" });
+  }
+};
+
+export const resendVerification = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user.email) return res.status(400).json({ error: "No email on file" });
+    if (user.email_verified) return res.status(400).json({ error: "Email already verified" });
+    const token = crypto.randomBytes(32).toString("hex");
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await User.setVerificationToken(user.id, token, expires);
+    await sendMail({ to: user.email, ...emailVerificationTemplate(token) });
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Failed to send email" });
+  }
+};
+
+export const forgotPassword = async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "Email required" });
+    const user = await User.findByEmail(email);
+    // Always return success to avoid email enumeration
+    if (user && user.password_hash) {
+      const token = crypto.randomBytes(32).toString("hex");
+      const expires = new Date(Date.now() + 60 * 60 * 1000);
+      await User.setResetToken(user.id, token, expires);
+      await sendMail({ to: email, ...passwordResetTemplate(token) });
+      logAuthEvent('password_reset_requested', { userId: user.id, email, ip });
+    } else {
+      logSecurityEvent('password_reset_requested_unknown_email', { email, ip });
+    }
+    res.json({ success: true, message: "If that email exists, a reset link was sent." });
+  } catch {
+    res.status(500).json({ error: "Failed to process request" });
+  }
+};
+
+export const resetPassword = async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) return res.status(400).json({ error: "Token and password required" });
+    const user = await User.findByResetToken(token);
+    if (!user) {
+      logSecurityEvent('password_reset_failed_invalid_token', { ip });
+      return res.status(400).json({ error: "Invalid or expired token" });
+    }
+    const hash = await bcrypt.hash(password, 10);
+    await User.updatePassword(user.id, hash);
+    await User.clearResetToken(user.id);
+    logAuthEvent('password_reset_completed', { userId: user.id, ip });
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Failed to reset password" });
+  }
+};
+
+export const getLeaderboard = async (req, res) => {
+  try {
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const sort = req.query.sort === 'streak' ? 'streak' : 'xp';
+    const offset = (page - 1) * limit;
+    const leaderboard = await User.getLeaderboard(limit, offset, sort);
+    const total = await User.getLeaderboardCount();
+    const rank = req.user ? await User.getRank(req.user.id, sort) : null;
+    res.json({ leaderboard, userRank: rank, total, page, totalPages: Math.ceil(total / limit) });
+  } catch {
+    res.status(500).json({ error: "Failed to load leaderboard" });
+  }
+};
+
+export const getQuizLeaderboard = async (req, res) => {
+  try {
+    const quizId = req.params.quizId;
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const leaderboard = await User.getQuizLeaderboard(quizId, limit);
+    res.json(leaderboard);
+  } catch {
+    res.status(500).json({ error: "Failed to load leaderboard" });
+  }
+};
+
+export const getFriends = async (req, res) => {
+  try {
+    const friends = await User.getFriends(req.user.id);
+    res.json(friends);
+  } catch {
+    res.status(500).json({ error: "Failed to load friends" });
+  }
+};
+
+export const searchUsers = async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.trim().length < 2) {
+      return res.json({ users: [] });
+    }
+    const users = await User.searchUsers(q.trim(), req.user.id);
+    res.json({ users });
+  } catch {
+    res.status(500).json({ error: "Failed to search users" });
+  }
+};
+
+export const addFriend = async (req, res) => {
+  try {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: "Username required" });
+    const friend = await User.findByUsernameExact(username);
+    if (!friend) return res.status(404).json({ error: "User not found" });
+    const updated = await User.addFriend(req.user.id, friend.id);
+    res.json({ friends: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to add friend" });
+  }
+};
+
+export const removeFriend = async (req, res) => {
+  try {
+    const friendId = parseInt(req.params.friendId);
+    const updated = await User.removeFriend(req.user.id, friendId);
+    res.json({ friends: updated });
+  } catch {
+    res.status(500).json({ error: "Failed to remove friend" });
+  }
+};
+
+export const getOnlineFriends = async (req, res) => {
+  try {
+    const friends = await User.getFriends(req.user.id);
+    const online = friends.filter(f => isOnline(f.username)).map(f => f.username);
+    res.json({ online });
+  } catch {
+    res.status(500).json({ error: "Failed to load status" });
   }
 };
 
 export const login = async (req, res) => {
   const { username, password } = req.body;
+  const ip = req.ip || req.connection.remoteAddress;
   try {
     if (!username || !password) {
+      logSecurityEvent('login_failed_missing_fields', { ip, username: username || 'unknown' });
       return res.status(400).json({ error: "Username and password are required." });
     }
     const user = await User.findByUsername(username);
-    if (!user) return res.status(401).json({ error: "Invalid credentials" });
+    if (!user) {
+      logSecurityEvent('login_failed_user_not_found', { ip, username });
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
     if (!user.password_hash) {
       return res.status(401).json({ error: "This account uses Google Sign-In. Please log in with Google." });
     }
 
     const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) return res.status(401).json({ error: "Invalid credentials" });
-
-    // Handle heart logic
-    const stats = calculateHearts(user);
-    if (stats.hearts !== user.hearts) {
-        await User.updateHearts(user.id, stats.hearts, stats.last_heart_update);
+    if (!valid) {
+      logSecurityEvent('login_failed_invalid_password', { ip, username, userId: user.id });
+      return res.status(401).json({ error: "Invalid credentials" });
     }
 
+    // Handle heart logic
+    const raw = await User.getRawHearts(user.id);
+    const stats = calculateHearts(raw.hearts, Number(raw.last_ms));
+    if (stats.hearts !== raw.hearts) {
+        await User.updateHearts(user.id, stats.hearts, new Date(stats.lastMs));
+    }
+
+    // Streak + daily bonus XP
+    const streakInfo = await User.updateStreak(user.id);
+
     const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
-    setAuthCookie(res, token, req.secure);
+    setAuthCookie(res, token, isSecureContext(req));
+
+    logAuthEvent('user_login', { userId: user.id, username, ip, streak: streakInfo?.streak });
 
     res.json({ 
-        token, 
-        user: safeUser({ ...user, hearts: stats.hearts, last_heart_update: stats.last_heart_update })
+        user: safeUser({ ...user, hearts: stats.hearts, last_heart_update: new Date(stats.lastMs), login_streak: streakInfo?.streak, longest_streak: streakInfo?.longest }),
+        streakBonus: streakInfo?.bonusXp || 0,
+        loginStreak: streakInfo?.streak || 0
     });
-  } catch (err) {
-    console.error("login error:", err);
+  } catch {
     res.status(500).json({ error: "Login failed" });
   }
 };
@@ -87,15 +276,15 @@ export const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: "User not found" });
-    const stats = calculateHearts(user);
+    const raw = await User.getRawHearts(req.user.id);
+    const stats = calculateHearts(raw.hearts, Number(raw.last_ms));
     
-    if (stats.hearts !== user.hearts) {
-       await User.updateHearts(user.id, stats.hearts, stats.last_heart_update);
+    if (stats.hearts !== raw.hearts) {
+       await User.updateHearts(user.id, stats.hearts, new Date(stats.lastMs));
     }
 
-    res.json(safeUser({ ...user, hearts: stats.hearts, last_heart_update: stats.last_heart_update }));
-  } catch (err) {
-    console.error("getMe error:", err);
+    res.json(safeUser({ ...user, hearts: stats.hearts, last_heart_update: new Date(stats.lastMs) }));
+  } catch {
     res.status(500).json({ error: "Failed to load user" });
   }
 };
@@ -115,7 +304,6 @@ export const updateProfile = async (req, res) => {
     const user = await User.findById(req.user.id);
     res.json(safeUser(user));
   } catch (err) {
-    console.error("updateProfile error:", err);
     if (err.code === "23505") {
       return res.status(400).json({ error: "Username or email already taken." });
     }
@@ -144,7 +332,6 @@ export const completeProfile = async (req, res) => {
     const user = await User.findById(req.user.id);
     res.json(safeUser(user));
   } catch (err) {
-    console.error("completeProfile error:", err);
     if (err.code === "23505") {
       return res.status(400).json({ error: "Username already taken." });
     }
@@ -156,19 +343,17 @@ export const loseHeart = async (req, res) => {
     try {
         await User.decrementHeart(req.user.id);
         res.json({ success: true });
-    } catch (err) {
-        console.error("loseHeart error:", err);
+    } catch {
         res.status(500).json({ error: "Failed to update hearts" });
     }
 };
 
 export const addXp = async (req, res) => {
-    const { amount } = req.body;
+    const XP_PER_QUIZ = 10;
     try {
-        await User.addXp(req.user.id, amount);
+        await User.addXp(req.user.id, XP_PER_QUIZ);
         res.json({ success: true });
-    } catch (err) {
-        console.error("addXp error:", err);
+    } catch {
         res.status(500).json({ error: "Failed to update XP" });
     }
 };
@@ -192,6 +377,9 @@ export const logout = (req, res) => {
         secure: req.secure,
         path: "/"
     });
+    if (req.user) {
+        logAuthEvent('user_logout', { userId: req.user.id, ip: req.ip || req.connection.remoteAddress });
+    }
     res.json({ success: true });
 };
 
@@ -206,8 +394,27 @@ export const uploadAvatar = async (req, res) => {
 
         const user = await User.findById(req.user.id);
         res.json(safeUser(user));
-    } catch (err) {
-        console.error("uploadAvatar error:", err);
+    } catch {
         res.status(500).json({ error: "Failed to upload avatar" });
     }
+};
+
+export const toggleBookmark = async (req, res) => {
+  try {
+    const { quizId } = req.body;
+    if (!quizId) return res.status(400).json({ error: "quizId required" });
+    const updated = await User.toggleBookmark(req.user.id, parseInt(quizId));
+    res.json({ bookmarked_quizzes: updated });
+  } catch {
+    res.status(500).json({ error: "Failed to update bookmark" });
+  }
+};
+
+export const getBookmarks = async (req, res) => {
+  try {
+    const bookmarks = await User.getBookmarks(req.user.id);
+    res.json(bookmarks);
+  } catch {
+    res.status(500).json({ error: "Failed to load bookmarks" });
+  }
 };

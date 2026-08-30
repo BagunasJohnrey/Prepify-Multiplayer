@@ -76,18 +76,19 @@ export default function CompleteProfile() {
           {/* Suggestion chips */}
           <div className="flex flex-wrap gap-2">
             {suggestions.map((name) => (
-              <button
+              <Button
                 key={name}
                 type="button"
                 onClick={() => pickSuggestion(name)}
-                className={`text-xs font-bold px-3 py-1.5 rounded-full border transition cursor-pointer ${
-                  username === name
-                    ? 'border-neon-blue bg-neon-blue/10 text-neon-blue'
-                    : 'border-gray-700 bg-gray-900 text-gray-400 hover:border-gray-500 hover:text-white'
-                }`}
+                variant={username === name ? 'primary' : 'ghost'}
+                size="sm"
+                className={username === name 
+                  ? 'text-neon-blue' 
+                  : 'border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'
+                }
               >
                 {name}
-              </button>
+              </Button>
             ))}
           </div>
 

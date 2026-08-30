@@ -6,15 +6,36 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
 import cookie from "cookie";
+import crypto from "crypto";
 import dotenv from "dotenv";
-import rateLimit from "express-rate-limit"; 
+import { connectRedis } from "./services/redisClient.js";
+import { 
+  apiLimiter, 
+  authLimiter, 
+  passwordResetLimiter, 
+  generateLimiter,
+  socketLimiter 
+} from "./services/rateLimiter.js";
+import { validateSocketEvent, socketSchemas } from "./middleware/validate.js";
 import authRoutes from "./routes/authRoutes.js";
 import quizRoutes from "./routes/quizRoutes.js";
 import Quiz from "./models/Quiz.js"; 
+import { userOnline, userOffline, getSocketIds } from "./utils/presence.js";
 import path from "path"; 
 import { fileURLToPath } from "url"; 
 
 dotenv.config();
+
+// Validate critical environment variables on startup
+if (!process.env.JWT_SECRET) {
+  throw new Error("FATAL: JWT_SECRET is missing. Set a strong secret (min 32 chars) in .env");
+}
+if (process.env.JWT_SECRET.length < 32) {
+  throw new Error("FATAL: JWT_SECRET must be at least 32 characters long");
+}
+if (process.env.NODE_ENV === 'production' && !process.env.CLIENT_URL) {
+  throw new Error("FATAL: CLIENT_URL must be set in production");
+}
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -25,20 +46,57 @@ const httpServer = createServer(app);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// CRITICAL FIX: Instruct Express to trust the proxy headers from Render/load balancer.
-app.set('trust proxy', 1);
+// Trust proxy headers from Render/load balancer (use numeric value for exact proxy count)
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : 'loopback');
 
 const PORT = process.env.PORT || 3000;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173'; 
-const allowedOrigins = [CLIENT_URL, 'http://localhost:5173'];
+
+// CORS origin validation - strict allowlist in production
+const getAllowedOrigins = () => {
+  const origins = [CLIENT_URL];
+  // Only allow localhost in development
+  if (process.env.NODE_ENV !== 'production') {
+    origins.push('http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:3000');
+  }
+  return origins;
+};
+
+const allowedOrigins = getAllowedOrigins();
+
+// CORS middleware with strict origin checking
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS policy: Origin ${origin} not allowed`));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+  exposedHeaders: ['Set-Cookie'],
+  maxAge: 86400 // 24 hours
+};
 
 const QUESTION_TIME_MS = 20000; 
 const ANSWER_REVEAL_DELAY_MS = 5000; 
 
-// Initialize Socket.IO with CORS using the CLIENT_URL variable
+// Initialize Socket.IO with CORS using strict origin validation
 const io = new SocketIOServer(httpServer, {
     cors: {
-        origin: allowedOrigins,
+        origin: (origin, callback) => {
+          if (!origin) return callback(null, true);
+          if (allowedOrigins.includes(origin)) {
+            callback(null, true);
+          } else {
+            callback(new Error(`Socket.IO CORS: Origin ${origin} not allowed`));
+          }
+        },
         methods: ["GET", "POST"],
         credentials: true
     },
@@ -49,8 +107,35 @@ const io = new SocketIOServer(httpServer, {
 
 app.set('socketio', io);
 
-// Optional auth for sockets: members identified via their httpOnly cookie, guests proceed anonymously.
+// Socket.IO connection rate limiting - use Redis-backed limiter with in-memory fallback
+const socketConnections = new Map();
+const SOCKET_MAX_CONNECTIONS = 10;
+const SOCKET_MAX_GUEST_CONNECTIONS = 3; // Stricter limit for unauthenticated
+const SOCKET_RATE_WINDOW_MS = 60 * 1000;
+
+// Apply Redis-backed rate limiter first
+io.use(socketLimiter);
+
+// Socket authentication: required in production, optional in development with strict guest limits
 io.use((socket, next) => {
+    // Rate limit per IP (in-memory fallback if Redis unavailable)
+    const ip = socket.handshake.address;
+    const now = Date.now();
+    const record = socketConnections.get(ip) || { count: 0, guestCount: 0, resetAt: now + SOCKET_RATE_WINDOW_MS };
+    if (now > record.resetAt) {
+        record.count = 0;
+        record.guestCount = 0;
+        record.resetAt = now + SOCKET_RATE_WINDOW_MS;
+    }
+    record.count++;
+    socketConnections.set(ip, record);
+
+    // Determine max connections based on auth status
+    const maxConnections = socket.user ? SOCKET_MAX_CONNECTIONS : SOCKET_MAX_GUEST_CONNECTIONS;
+    if (record.count > maxConnections) {
+        return next(new Error('Too many connections from this IP'));
+    }
+
     try {
         const cookies = cookie.parse(socket.handshake.headers.cookie || "");
         const token = cookies.token || socket.handshake.auth?.token;
@@ -58,54 +143,92 @@ io.use((socket, next) => {
             socket.user = jwt.verify(token, JWT_SECRET);
         }
     } catch {
-        // Invalid/expired token → treat as guest, do not reject the connection.
+        // Invalid/expired token → treat as guest
     }
+
+    // In production, require authentication for Socket.IO connections
+    const isProduction = process.env.NODE_ENV === 'production';
+    const isGuest = !socket.user;
+    
+    if (isProduction && isGuest) {
+        // Track guest connections per IP for stricter rate limiting
+        record.guestCount++;
+        if (record.guestCount > SOCKET_MAX_GUEST_CONNECTIONS) {
+            return next(new Error('Authentication required for Socket.IO connections'));
+        }
+    }
+    
     next();
 });
+
+// Periodically clean up stale socket connection records (kept for backwards compat / non-Redis fallback)
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, record] of socketConnections.entries()) {
+        if (now > record.resetAt) socketConnections.delete(ip);
+    }
+}, SOCKET_RATE_WINDOW_MS * 2);
 
 // Explicit Socket.IO Polling/Health Check Route
 app.get('/socket.io/', (req, res) => {
     res.status(200).send('Socket.IO health check successful.');
 });
 
-// Security headers
-app.use(helmet({ contentSecurityPolicy: false }));
+// Security headers with CSP nonce support
+app.use((req, res, next) => {
+  // Generate a nonce for this request
+  res.locals.cspNonce = crypto.randomBytes(16).toString('base64');
+  next();
+});
+
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", (req, res) => `'nonce-${res.locals.cspNonce}'`],
+      styleSrc: ["'self'", (req, res) => `'nonce-${res.locals.cspNonce}'`],
+      imgSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'", "ws:", "wss:"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+  // Additional security headers
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  permissionsPolicy: {
+    features: {
+      camera: ["'none'"],
+      microphone: ["'none'"],
+      geolocation: ["'none'"],
+      payment: ["'none'"],
+      usb: ["'none'"]
+    }
+  }
+}));
 
 // Express CORS setup
-app.use(cors({
-  origin: allowedOrigins,
-  credentials: true
-}));
+app.use(cors(corsOptions));
 
 app.use(cookieParser());
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, 
-  max: 100,
-  message: "Too many requests from this IP, please try again later."
-});
-app.use("/api", limiter);
+// Redis-backed rate limiters
+app.use("/api", apiLimiter);
 
 // Strict limiter to prevent login brute-force / user enumeration
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: "Too many authentication attempts, please try again later."
-});
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
 app.use("/api/auth/google", authLimiter);
 
-const generateLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, 
-  max: 10,
-  message: "Generation limit reached. Please try again later."
-});
+app.use("/api/auth/forgot-password", passwordResetLimiter);
+app.use("/api/auth/reset-password", passwordResetLimiter);
+
 app.use("/api/generate", generateLimiter);
 
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 
 app.use("/api/auth", authRoutes); 
 app.use("/api", quizRoutes);      
@@ -188,7 +311,16 @@ const advanceGame = (roomCode, roomState) => {
             finalRanking: ranking,
             isFinal: true
         });
-        rooms.delete(roomCode); 
+        // Reset room to lobby state instead of deleting it
+        roomState.currentQ = 0;
+        roomState.quizData = null;
+        roomState.qStartTime = null;
+        if (roomState.qTimeout) { clearTimeout(roomState.qTimeout); roomState.qTimeout = null; }
+        for (const player of roomState.players) {
+            player.score = 0;
+            player.answers = [];
+            player.lastScore = 0;
+        }
     } else {
         roomState.currentQ++;
         
@@ -220,20 +352,25 @@ const advanceGame = (roomCode, roomState) => {
     }
 };
 
-io.on('connection', (socket) => {
-    console.log('A user connected via socket:', socket.id);
+ io.on('connection', (socket) => {
+    const connUsername = socket.user?.username;
+    if (connUsername) userOnline(connUsername, socket.id);
 
     socket.on('createRoom', (data) => {
-        // Members are bound to their account username; guests use the client-supplied name.
-        const username = socket.user?.username || data.username;
-        const { quizId } = data;
+        const validated = validateSocketEvent(socketSchemas.createRoom)(data);
+        if (!validated) return;
+        const rawUsername = socket.user?.username || validated.username;
+        const username = socket.user?.username
+          ? rawUsername
+          : String(rawUsername || '').replace(/[^a-zA-Z0-9_-]/g, '').trim().substring(0, 20);
+        const { quizId } = validated;
 
         if (rooms.size >= 1000) {
             socket.emit('roomError', 'Server is at capacity. Please try again later.');
             return;
         }
 
-        const roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+        const roomCode = crypto.randomBytes(4).toString('hex').toUpperCase().substring(0, 6);
         
         socket.join(roomCode);
         
@@ -255,8 +392,13 @@ io.on('connection', (socket) => {
     });
 
     socket.on('joinRoom', (data) => {
-        const roomCode = data.roomCode;
-        const username = socket.user?.username || data.username;
+        const validated = validateSocketEvent(socketSchemas.joinRoom)(data);
+        if (!validated) return;
+        const roomCode = validated.roomCode;
+        const rawUsername = socket.user?.username || validated.username;
+        const username = socket.user?.username
+          ? rawUsername
+          : String(rawUsername || '').replace(/[^a-zA-Z0-9_-]/g, '').trim().substring(0, 20);
         const roomState = rooms.get(roomCode);
         
         if (!roomState) {
@@ -277,8 +419,26 @@ io.on('connection', (socket) => {
         socket.to(roomCode).emit('lobbyUpdate', getSafeRoomState(roomState)); 
     });
 
+    socket.on('lobbyChat', (data) => {
+        const validated = validateSocketEvent(socketSchemas.lobbyChat)(data);
+        if (!validated) return;
+        const roomCode = validated.roomCode;
+        const roomState = rooms.get(roomCode);
+        if (!roomState) return;
+        const rawUsername = socket.user?.username || validated.username;
+        const username = socket.user?.username
+          ? rawUsername
+          : String(rawUsername || '').replace(/[^a-zA-Z0-9_-]/g, '').trim().substring(0, 20);
+        const message = String(validated.message || '').replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' })[c]).slice(0, 500).trim();
+        if (!message) return;
+        const payload = { username, message, timestamp: Date.now() };
+        io.to(roomCode).emit('lobbyChat', payload);
+    });
+
     socket.on('startGame', async (data) => {
-        const { roomCode, quizId } = data;
+        const validated = validateSocketEvent(socketSchemas.startGame)(data);
+        if (!validated) return;
+        const { roomCode, quizId } = validated;
         const roomState = rooms.get(roomCode);
         
         if (!roomState || roomState.hostSocketId !== socket.id) {
@@ -299,7 +459,6 @@ io.on('connection', (socket) => {
             } else if (Array.isArray(quiz.questions)) {
                  roomState.quizData = quiz.questions; 
             } else {
-                 console.error(`Quiz data for ID ${quizId} is not a valid structure.`);
                  io.to(roomCode).emit('roomError', 'Quiz data structure is invalid.');
                  return;
             }
@@ -336,13 +495,28 @@ io.on('connection', (socket) => {
             }, 5000); 
             
         } catch (error) {
-            console.error('Fatal Error fetching quiz data:', error);
             io.to(roomCode).emit('roomError', 'Internal server error starting game.');
         }
     });
 
+    socket.on('changeQuiz', (data) => {
+        const validated = validateSocketEvent(socketSchemas.changeQuiz)(data);
+        if (!validated) return;
+        const { roomCode, quizId } = validated;
+        const roomState = rooms.get(roomCode);
+        if (!roomState) return;
+        if (roomState.hostSocketId !== socket.id) {
+            socket.emit('roomError', 'Access Denied: Only host can change quiz.');
+            return;
+        }
+        roomState.quizId = quizId;
+        io.to(roomCode).emit('lobbyUpdate', getSafeRoomState(roomState));
+    });
+
     socket.on('submitAnswer', (data) => {
-        const { selected, roomCode } = data;
+        const validated = validateSocketEvent(socketSchemas.submitAnswer)(data);
+        if (!validated) return;
+        const { selected, roomCode } = validated;
         const roomState = rooms.get(roomCode);
         
         if (!roomState) return;
@@ -371,7 +545,45 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('sendInvite', (data) => {
+        const validated = validateSocketEvent(socketSchemas.sendInvite)(data);
+        if (!validated) return;
+        const { toUsername } = validated;
+        const fromUsername = socket.user?.username;
+        if (!fromUsername || !toUsername) return;
+
+        const targetSocketIds = getSocketIds(toUsername);
+        if (targetSocketIds.length === 0) {
+            socket.emit('inviteError', { username: toUsername, error: 'User is not online' });
+            return;
+        }
+
+        targetSocketIds.forEach(socketId => {
+            io.to(socketId).emit('gameInvite', {
+                fromUsername,
+                fromSocketId: socket.id
+            });
+        });
+
+        socket.emit('inviteSent', { username: toUsername });
+    });
+
+    socket.on('respondInvite', (data) => {
+        const validated = validateSocketEvent(socketSchemas.respondInvite)(data);
+        if (!validated) return;
+        const { toSocketId, accepted } = validated;
+        const fromUsername = socket.user?.username;
+        if (!fromUsername || !toSocketId) return;
+
+        io.to(toSocketId).emit('inviteResponse', {
+            fromUsername,
+            accepted
+        });
+    });
+
     socket.on('disconnect', () => {
+        if (connUsername) userOffline(connUsername, socket.id);
+
         const roomInfo = findRoomBySocketId(socket.id);
 
         if (roomInfo) {
@@ -397,7 +609,9 @@ io.on('connection', (socket) => {
     });
 
     socket.on('leaveRoom', (data) => {
-        const { roomCode } = data;
+        const validated = validateSocketEvent(socketSchemas.leaveRoom)(data);
+        if (!validated) return;
+        const { roomCode } = validated;
         const roomState = rooms.get(roomCode);
         
         if (roomState) {
@@ -426,6 +640,18 @@ io.on('connection', (socket) => {
 });
 
 // ==========================================
+// GLOBAL ERROR HANDLER
+// ==========================================
+app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    const statusCode = err.statusCode || 500;
+    const message = process.env.NODE_ENV === 'production'
+        ? 'Internal server error'
+        : err.message || 'Internal server error';
+    res.status(statusCode).json({ error: message });
+});
+
+// ==========================================
 // SPA ROUTING FIX
 // ==========================================
 
@@ -451,12 +677,16 @@ const PING_INTERVAL = 600000;
 function selfPing() {
     if (RENDER_HOSTNAME === 'localhost' || RENDER_HOSTNAME === undefined) return;
     fetch(PING_URL + '/api/quizzes', { headers: { 'User-Agent': 'Render-Self-Pinger' } })
-        .then(response => console.log(`Self-ping successful: Status ${response.status}`))
-        .catch(err => console.error(`Self-ping failed: ${err.message}`));
+        .catch(() => {});
 }
 
 // Only start listening when run directly (not when imported by tests)
 if (process.env.NODE_ENV !== "test") {
+  // Connect to Redis for rate limiting
+  connectRedis().catch(err => {
+    console.warn('Redis connection failed, rate limiting will use in-memory fallback:', err.message);
+  });
+
   httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Prepify Server running on port ${PORT}`);
     if (RENDER_HOSTNAME !== 'localhost' && RENDER_HOSTNAME !== undefined) {
