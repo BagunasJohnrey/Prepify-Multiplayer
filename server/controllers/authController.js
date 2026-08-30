@@ -119,7 +119,8 @@ export const resendVerification = async (req, res) => {
 
     resendVerificationCooldowns.set(user.id, Date.now());
     res.json({ success: true });
-  } catch {
+  } catch (err) {
+    console.error('resendVerification error:', err);
     res.status(500).json({ error: "Failed to send email" });
   }
 };
