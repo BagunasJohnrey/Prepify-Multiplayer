@@ -12,6 +12,9 @@ dotenv.config();
 const JWT_SECRET = process.env.JWT_SECRET;
 const TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+// In-memory rate limit for resend verification (1 per 60s per user)
+const resendVerificationCooldowns = new Map();
+
 const safeUser = (u) => ({
   id: u.id,
   username: u.username,
@@ -77,9 +80,18 @@ export const verifyEmail = async (req, res) => {
   try {
     const { token } = req.body;
     if (!token) return res.status(400).json({ error: "Token required" });
+
     const user = await User.findByVerificationToken(token);
-    if (!user) return res.status(400).json({ error: "Invalid or expired token" });
+    if (!user) {
+      const alreadyVerified = await User.isEmailVerifiedByToken(token);
+      if (alreadyVerified) {
+        return res.json({ success: true, message: "Email was already verified" });
+      }
+      return res.status(400).json({ error: "Invalid or expired token" });
+    }
+
     await User.markEmailVerified(user.id);
+    logAuthEvent('email_verified', { userId: user.id, email: user.email });
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: "Failed to verify email" });
@@ -91,10 +103,21 @@ export const resendVerification = async (req, res) => {
     const user = await User.findById(req.user.id);
     if (!user.email) return res.status(400).json({ error: "No email on file" });
     if (user.email_verified) return res.status(400).json({ error: "Email already verified" });
+
+    // Rate limit: 1 email per 60 seconds per user
+    const now = Date.now();
+    const lastSent = resendVerificationCooldowns.get(user.id);
+    if (lastSent && now - lastSent < 60000) {
+      const wait = Math.ceil((60000 - (now - lastSent)) / 1000);
+      return res.status(429).json({ error: `Please wait ${wait}s before resending` });
+    }
+
     const token = crypto.randomBytes(32).toString("hex");
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await User.setVerificationToken(user.id, token, expires);
     await sendMail({ to: user.email, ...emailVerificationTemplate(token) });
+
+    resendVerificationCooldowns.set(user.id, Date.now());
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: "Failed to send email" });

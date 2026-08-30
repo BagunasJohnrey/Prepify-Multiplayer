@@ -238,6 +238,14 @@ export default {
     );
   },
 
+  async isEmailVerifiedByToken(token) {
+    const { rows } = await pool.query(
+      "SELECT email_verified FROM users WHERE email_verification_token = $1",
+      [token]
+    );
+    return rows[0]?.email_verified || false;
+  },
+
   async setResetToken(id, token, expires) {
     await pool.query(
       "UPDATE users SET password_reset_token = $1, password_reset_expires = $2 WHERE id = $3",

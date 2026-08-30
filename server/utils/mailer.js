@@ -39,12 +39,73 @@ export const emailVerificationTemplate = (token) => {
   const link = `${APP_URL}/verify-email?token=${token}`;
   return {
     subject: "Verify your Prepify account",
-    html: `<div style="font-family:sans-serif;max-width:480px;margin:auto">
-      <h2 style="color:#00f3ff">Verify your email</h2>
-      <p>Thanks for joining Prepify! Confirm your email to unlock all features.</p>
-      <a href="${link}" style="display:inline-block;background:#00f3ff;color:#000;padding:12px 24px;border-radius:10px;font-weight:bold;text-decoration:none">Verify Email</a>
-      <p style="color:#888;font-size:12px;margin-top:16px">Or paste this link: ${link}</p>
-    </div>`,
+    html: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#0b0b12;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0b0b12;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="480" cellpadding="0" cellspacing="0" style="background-color:#12121b;border-radius:20px;border:1px solid rgba(255,255,255,0.06);overflow:hidden;">
+          <!-- Header -->
+          <tr>
+            <td style="padding:40px 40px 20px;text-align:center;background:linear-gradient(180deg,rgba(0,243,255,0.08) 0%,transparent 100%);">
+              <h1 style="margin:0;font-size:32px;font-weight:900;color:#ffffff;letter-spacing:2px;">PREPIFY</h1>
+              <p style="margin:8px 0 0;font-size:11px;color:#6b7280;letter-spacing:3px;text-transform:uppercase;">AI-Powered Exam Prep</p>
+            </td>
+          </tr>
+          <!-- Icon -->
+          <tr>
+            <td align="center" style="padding:20px 0 10px;">
+              <div style="width:64px;height:64px;border-radius:16px;background:rgba(0,243,255,0.1);display:inline-block;line-height:64px;text-align:center;">
+                <span style="font-size:28px;">&#9993;</span>
+              </div>
+            </td>
+          </tr>
+          <!-- Content -->
+          <tr>
+            <td style="padding:10px 40px 30px;text-align:center;">
+              <h2 style="margin:0 0 16px;font-size:22px;color:#ffffff;">Verify your email</h2>
+              <p style="margin:0 0 8px;font-size:15px;color:#9ca3af;line-height:1.6;">Thanks for joining Prepify! Click the button below to confirm your email and unlock all features.</p>
+              <p style="margin:0 0 32px;font-size:13px;color:#6b7280;">This link expires in 24 hours.</p>
+            </td>
+          </tr>
+          <!-- Button -->
+          <tr>
+            <td align="center" style="padding:0 40px 40px;">
+              <a href="${link}" style="display:inline-block;background:linear-gradient(135deg,#00f3ff 0%,#00c4cc 100%);color:#0b0b12;padding:14px 40px;border-radius:12px;font-weight:800;font-size:15px;text-decoration:none;letter-spacing:0.5px;">Verify Email</a>
+            </td>
+          </tr>
+          <!-- Divider -->
+          <tr>
+            <td style="padding:0 40px;">
+              <div style="height:1px;background:rgba(255,255,255,0.06);"></div>
+            </td>
+          </tr>
+          <!-- Fallback link -->
+          <tr>
+            <td style="padding:24px 40px 40px;text-align:center;">
+              <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Or copy this link:</p>
+              <p style="margin:0;font-size:12px;color:#00f3ff;word-break:break-all;">${link}</p>
+            </td>
+          </tr>
+        </table>
+        <!-- Footer -->
+        <table width="480" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="padding:20px 0;text-align:center;">
+              <p style="margin:0;font-size:11px;color:#4b5563;">If you didn't create an account, you can safely ignore this email.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
   };
 };
 
@@ -52,11 +113,72 @@ export const passwordResetTemplate = (token) => {
   const link = `${APP_URL}/reset-password?token=${token}`;
   return {
     subject: "Reset your Prepify password",
-    html: `<div style="font-family:sans-serif;max-width:480px;margin:auto">
-      <h2 style="color:#bc13fe">Password Reset</h2>
-      <p>We received a request to reset your password. This link expires in 1 hour.</p>
-      <a href="${link}" style="display:inline-block;background:#bc13fe;color:#fff;padding:12px 24px;border-radius:10px;font-weight:bold;text-decoration:none">Reset Password</a>
-      <p style="color:#888;font-size:12px;margin-top:16px">Or paste this link: ${link}</p>
-    </div>`,
+    html: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#0b0b12;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0b0b12;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="480" cellpadding="0" cellspacing="0" style="background-color:#12121b;border-radius:20px;border:1px solid rgba(255,255,255,0.06);overflow:hidden;">
+          <!-- Header -->
+          <tr>
+            <td style="padding:40px 40px 20px;text-align:center;background:linear-gradient(180deg,rgba(188,19,254,0.08) 0%,transparent 100%);">
+              <h1 style="margin:0;font-size:32px;font-weight:900;color:#ffffff;letter-spacing:2px;">PREPIFY</h1>
+              <p style="margin:8px 0 0;font-size:11px;color:#6b7280;letter-spacing:3px;text-transform:uppercase;">AI-Powered Exam Prep</p>
+            </td>
+          </tr>
+          <!-- Icon -->
+          <tr>
+            <td align="center" style="padding:20px 0 10px;">
+              <div style="width:64px;height:64px;border-radius:16px;background:rgba(188,19,254,0.1);display:inline-block;line-height:64px;text-align:center;">
+                <span style="font-size:28px;">&#128274;</span>
+              </div>
+            </td>
+          </tr>
+          <!-- Content -->
+          <tr>
+            <td style="padding:10px 40px 30px;text-align:center;">
+              <h2 style="margin:0 0 16px;font-size:22px;color:#ffffff;">Password Reset</h2>
+              <p style="margin:0 0 8px;font-size:15px;color:#9ca3af;line-height:1.6;">We received a request to reset your password. Click below to set a new one.</p>
+              <p style="margin:0 0 32px;font-size:13px;color:#6b7280;">This link expires in 1 hour.</p>
+            </td>
+          </tr>
+          <!-- Button -->
+          <tr>
+            <td align="center" style="padding:0 40px 40px;">
+              <a href="${link}" style="display:inline-block;background:linear-gradient(135deg,#bc13fe 0%,#9b11d9 100%);color:#ffffff;padding:14px 40px;border-radius:12px;font-weight:800;font-size:15px;text-decoration:none;letter-spacing:0.5px;">Reset Password</a>
+            </td>
+          </tr>
+          <!-- Divider -->
+          <tr>
+            <td style="padding:0 40px;">
+              <div style="height:1px;background:rgba(255,255,255,0.06);"></div>
+            </td>
+          </tr>
+          <!-- Fallback link -->
+          <tr>
+            <td style="padding:24px 40px 40px;text-align:center;">
+              <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Or copy this link:</p>
+              <p style="margin:0;font-size:12px;color:#bc13fe;word-break:break-all;">${link}</p>
+            </td>
+          </tr>
+        </table>
+        <!-- Footer -->
+        <table width="480" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="padding:20px 0;text-align:center;">
+              <p style="margin:0;font-size:11px;color:#4b5563;">If you didn't request a password reset, you can safely ignore this email.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
   };
 };
