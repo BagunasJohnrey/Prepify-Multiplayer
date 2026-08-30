@@ -126,10 +126,11 @@ export const deleteQuizSchema = z.object({
 
 export const generateQuizSchema = z.object({
   body: z.object({
-    course: z.string().min(1).max(100).optional(),
+    course: z.string().trim().min(1).max(100).optional(),
     customTitle: z.string().max(200).optional(),
     numQuestions: z.coerce.number().int().min(1).max(50).default(10),
-    difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
+    difficulty: z.enum(['easy', 'medium', 'hard', 'Easy', 'Medium', 'Hard']).optional()
+      .transform(v => v ? v.toLowerCase() : v),
     description: z.string().max(1000).optional(),
     tags: z.string().max(500).optional()
   })
