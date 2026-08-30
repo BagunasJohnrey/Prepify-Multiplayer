@@ -105,8 +105,14 @@ export default function About() {
           <AnimatedSection delay={300}>
             <div className="mt-10 sm:mt-14 flex flex-col items-center gap-3">
               <div className="flex -space-x-2">
-                {[1, 5, 11, 16, 32].map((id) => (
-                  <img key={id} src={`https://i.pravatar.cc/150?img=${id}`} alt="Student" className="w-8 h-8 rounded-full border-2 border-[#0b0b12] object-cover" />
+                {[
+                  { src: '/pictures/aespa karina.jpg', name: 'Karina' },
+                  { src: '/pictures/aespa winter.jpg', name: 'Winter' },
+                  { src: '/pictures/aespa iverene.jpg', name: 'Iverene' },
+                  { src: '/pictures/aespa giselle.jpg', name: 'Giselle' },
+                  { src: '/pictures/aespa ningning.jpg', name: 'Ningning' },
+                ].map((p) => (
+                  <img key={p.name} src={p.src} alt={p.name} className="w-8 h-8 rounded-full border-2 border-[#0b0b12] object-cover" />
                 ))}
               </div>
               <p className="text-xs sm:text-sm text-gray-500">
