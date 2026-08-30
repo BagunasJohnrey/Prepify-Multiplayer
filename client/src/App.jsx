@@ -48,6 +48,10 @@ export default function App() {
                 },
               },
               error: {
+                icon: null,
+                style: {
+                  border: '1px solid rgba(239, 68, 68, 0.4)',
+                },
                 iconTheme: {
                   primary: '#ef4444',
                   secondary: 'white',

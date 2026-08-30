@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Trophy, Medal, Crown, Star, Loader, TrendingUp, Flame } from 'lucide-react';
+import { ArrowLeft, Trophy, Medal, Crown, Star, Loader, TrendingUp, Flame, UserPlus, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { toastOnce } from '../utils/toast';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
@@ -33,8 +34,36 @@ export default function Leaderboard() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [friendIds, setFriendIds] = useState(new Set());
+  const [addingFriendId, setAddingFriendId] = useState(null);
   const observerRef = useRef(null);
   const loadMoreRef = useRef(null);
+
+  const fetchFriends = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data } = await api.get('/auth/friends');
+      setFriendIds(new Set((Array.isArray(data) ? data : data.friends || []).map(f => f.id)));
+    } catch {
+      // non-blocking: friend buttons just won't pre-mark
+    }
+  }, [user]);
+
+  useEffect(() => { fetchFriends(); }, [fetchFriends]);
+
+  const handleAddFriend = async (entry) => {
+    if (addingFriendId) return;
+    setAddingFriendId(entry.id);
+    try {
+      await api.post('/auth/friends', { username: entry.username });
+      setFriendIds(prev => new Set(prev).add(entry.id));
+      toastOnce.success(`Added ${entry.username} as a friend!`);
+    } catch (err) {
+      toastOnce.error(err.response?.data?.error || 'Failed to add friend');
+    } finally {
+      setAddingFriendId(null);
+    }
+  };
 
   const fetchLeaderboard = useCallback(async (pageNum, reset = false) => {
     if (pageNum === 1) setLoading(true);
@@ -199,6 +228,22 @@ export default function Leaderboard() {
                       </div>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
+                      {user && entry.id !== user.id && (
+                        friendIds.has(entry.id) ? (
+                          <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-neon-green/80 bg-neon-green/10 border border-neon-green/20 px-2 py-1 rounded-lg">
+                            <Check size={12} /> Friend
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleAddFriend(entry)}
+                            disabled={addingFriendId === entry.id}
+                            title={`Add ${entry.username} as friend`}
+                            className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-gray-300 bg-white/[0.04] border border-white/[0.08] px-2 py-1 rounded-lg hover:bg-neon-blue/10 hover:text-neon-blue hover:border-neon-blue/30 transition disabled:opacity-50"
+                          >
+                            {addingFriendId === entry.id ? <Loader size={12} className="animate-spin" /> : <UserPlus size={12} />} Add
+                          </button>
+                        )
+                      )}
                       {sort === 'streak' ? (
                         <>
                           <div className="flex items-center gap-1 text-orange-400 font-semibold">

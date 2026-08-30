@@ -246,8 +246,9 @@ export const addFriend = async (req, res) => {
     if (!username) return res.status(400).json({ error: "Username required" });
     const friend = await User.findByUsernameExact(username);
     if (!friend) return res.status(404).json({ error: "User not found" });
+    if (friend.id === req.user.id) return res.status(400).json({ error: "You can't add yourself" });
     const updated = await User.addFriend(req.user.id, friend.id);
-    res.json({ friends: updated });
+    res.json({ friends: updated, username: friend.username });
   } catch (err) {
     res.status(500).json({ error: err.message || "Failed to add friend" });
   }
