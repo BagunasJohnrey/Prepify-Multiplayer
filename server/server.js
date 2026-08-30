@@ -174,22 +174,16 @@ app.get('/socket.io/', (req, res) => {
     res.status(200).send('Socket.IO health check successful.');
 });
 
-// Security headers with CSP nonce support
-app.use((req, res, next) => {
-  // Generate a nonce for this request
-  res.locals.cspNonce = crypto.randomBytes(16).toString('base64');
-  next();
-});
-
+// Security headers
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", (req, res) => `'nonce-${res.locals.cspNonce}'`],
-      styleSrc: ["'self'", (req, res) => `'nonce-${res.locals.cspNonce}'`],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "blob:"],
       connectSrc: ["'self'", "ws:", "wss:"],
-      fontSrc: ["'self'"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],
       frameAncestors: ["'none'"],
       baseUri: ["'self'"],

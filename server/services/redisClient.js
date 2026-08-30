@@ -1,6 +1,7 @@
 import Redis from "ioredis";
 
 let redisClient = null;
+let _isConnected = false;
 
 export function getRedisClient() {
   if (!redisClient) {
@@ -14,15 +15,24 @@ export function getRedisClient() {
       lazyConnect: true,
     });
 
-    redisClient.on('error', (err) => {
-      console.error('Redis connection error:', err.message);
+    redisClient.on('error', () => {
+      _isConnected = false;
     });
 
     redisClient.on('connect', () => {
+      _isConnected = true;
       console.log('Redis connected');
+    });
+
+    redisClient.on('close', () => {
+      _isConnected = false;
     });
   }
   return redisClient;
+}
+
+export function isRedisConnected() {
+  return _isConnected && redisClient && redisClient.status === 'ready';
 }
 
 export async function connectRedis() {
@@ -37,6 +47,7 @@ export async function disconnectRedis() {
   if (redisClient) {
     await redisClient.quit();
     redisClient = null;
+    _isConnected = false;
   }
 }
 

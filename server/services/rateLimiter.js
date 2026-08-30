@@ -1,4 +1,4 @@
-import { getRedisClient } from "./redisClient.js";
+import { getRedisClient, isRedisConnected } from "./redisClient.js";
 
 /**
  * Sliding window rate limiter using Redis
@@ -6,7 +6,6 @@ import { getRedisClient } from "./redisClient.js";
  */
 export class RedisRateLimiter {
   constructor(options = {}) {
-    this.redis = getRedisClient();
     this.keyPrefix = options.keyPrefix || 'ratelimit:';
     this.windowMs = options.windowMs || 60000; // 1 minute default
     this.maxRequests = options.maxRequests || 100;
@@ -14,6 +13,10 @@ export class RedisRateLimiter {
     this.statusCode = options.statusCode || 429;
     this.standardHeaders = options.standardHeaders ?? true;
     this.legacyHeaders = options.legacyHeaders ?? false;
+  }
+
+  get redis() {
+    return getRedisClient();
   }
 
   /**
@@ -26,12 +29,16 @@ export class RedisRateLimiter {
   /**
    * Check and increment the rate limit counter
    * Returns { allowed: boolean, remaining: number, resetTime: number, total: number }
+   * If Redis is unavailable, allows the request through (fail open).
    */
   async consume(identifier, cost = 1) {
+    if (!isRedisConnected()) {
+      return { allowed: true, remaining: this.maxRequests, resetTime: Date.now() + this.windowMs, total: 0, retryAfter: null };
+    }
+
     const key = this.getKey(identifier);
     const now = Date.now();
     const windowStart = now - this.windowMs;
-    const windowEnd = now + this.windowMs; // For TTL
 
     const multi = this.redis.multi();
 
@@ -70,6 +77,7 @@ export class RedisRateLimiter {
    * Reset rate limit for an identifier
    */
   async reset(identifier) {
+    if (!isRedisConnected()) return;
     const key = this.getKey(identifier);
     await this.redis.del(key);
   }
@@ -78,6 +86,10 @@ export class RedisRateLimiter {
    * Get current rate limit status without consuming
    */
   async getStatus(identifier) {
+    if (!isRedisConnected()) {
+      return { total: 0, remaining: this.maxRequests, resetTime: Date.now() + this.windowMs };
+    }
+
     const key = this.getKey(identifier);
     const now = Date.now();
     const windowStart = now - this.windowMs;
