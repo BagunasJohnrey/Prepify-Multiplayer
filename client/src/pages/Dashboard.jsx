@@ -163,8 +163,10 @@ export default function Dashboard() {
       const { data } = await api.post('/generate', formData);
       toast.success(`Success! "${data.title}" is ready.`);
       fetchQuizzes(); refreshUser(); setFile(null);
-    } catch { toast.error("Error generating quiz. Please try again."); }
-    finally { setLoading(false); setProgress({ current: 0, total: 0 }); }
+    } catch (err) {
+      const msg = err.response?.data?.error;
+      toastOnce.error(msg || "Error generating quiz. Please try again.", { duration: 5000 });
+    } finally { setLoading(false); setProgress({ current: 0, total: 0 }); }
   };
 
   const handleDelete = (e, quizId) => { e.stopPropagation(); setQuizToDelete(quizId); };

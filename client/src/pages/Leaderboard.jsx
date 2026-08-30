@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Trophy, Medal, Crown, Star, Loader, TrendingUp, Flame, UserPlus, Check } from 'lucide-react';
+import { ArrowLeft, Trophy, Medal, Crown, Star, Loader, TrendingUp, Flame, UserPlus, Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { toastOnce } from '../utils/toast';
 import api from '../utils/api';
@@ -36,6 +36,7 @@ export default function Leaderboard() {
   const [hasMore, setHasMore] = useState(true);
   const [friendIds, setFriendIds] = useState(new Set());
   const [addingFriendId, setAddingFriendId] = useState(null);
+  const [selectedUser, setSelectedUser] = useState(null);
   const observerRef = useRef(null);
   const loadMoreRef = useRef(null);
 
@@ -211,7 +212,11 @@ export default function Leaderboard() {
               {entries.map((entry, idx) => {
                 const globalRank = idx + 1;
                 return (
-                  <div key={entry.id} className={`flex items-center gap-4 p-4 px-5 sm:px-6 ${getRankStyle(globalRank)} border-l-4`}>
+                  <button
+                    key={entry.id}
+                    onClick={() => setSelectedUser(entry)}
+                    className={`w-full text-left flex items-center gap-4 p-4 px-5 sm:px-6 ${getRankStyle(globalRank)} border-l-4 hover:brightness-125 transition`}
+                  >
                     <div className="w-8 flex justify-center">{getRankIcon(globalRank)}</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2.5">
@@ -228,22 +233,6 @@ export default function Leaderboard() {
                       </div>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
-                      {user && entry.id !== user.id && (
-                        friendIds.has(entry.id) ? (
-                          <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-neon-green/80 bg-neon-green/10 border border-neon-green/20 px-2 py-1 rounded-lg">
-                            <Check size={12} /> Friend
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => handleAddFriend(entry)}
-                            disabled={addingFriendId === entry.id}
-                            title={`Add ${entry.username} as friend`}
-                            className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-gray-300 bg-white/[0.04] border border-white/[0.08] px-2 py-1 rounded-lg hover:bg-neon-blue/10 hover:text-neon-blue hover:border-neon-blue/30 transition disabled:opacity-50"
-                          >
-                            {addingFriendId === entry.id ? <Loader size={12} className="animate-spin" /> : <UserPlus size={12} />} Add
-                          </button>
-                        )
-                      )}
                       {sort === 'streak' ? (
                         <>
                           <div className="flex items-center gap-1 text-orange-400 font-semibold">
@@ -266,7 +255,7 @@ export default function Leaderboard() {
                         </>
                       )}
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -291,6 +280,72 @@ export default function Leaderboard() {
           )}
         </div>
       </div>
+
+      {/* Player popup */}
+      {selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setSelectedUser(null)}>
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div
+            className="relative bg-[#12121b] border border-white/[0.08] rounded-2xl w-full max-w-sm p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setSelectedUser(null)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-white transition"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-4">
+              {selectedUser.avatar_url ? (
+                <img src={selectedUser.avatar_url} alt="" className="w-16 h-16 rounded-2xl object-cover border border-white/10" />
+              ) : (
+                <div className="w-16 h-16 rounded-2xl bg-white/[0.04] flex items-center justify-center text-2xl font-black text-gray-300 border border-white/[0.06]">
+                  {selectedUser.username.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0">
+                <h3 className="text-lg font-bold text-white truncate">{selectedUser.username}</h3>
+                <p className="text-xs text-gray-500">Rank #{entries.findIndex(e => e.id === selectedUser.id) + 1}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mt-5">
+              <div className="bg-white/[0.03] border border-white/[0.04] rounded-xl p-3 text-center">
+                <p className="text-lg font-bold text-neon-green">{selectedUser.xp}</p>
+                <p className="text-[9px] text-gray-500 uppercase tracking-wider mt-0.5">XP</p>
+              </div>
+              <div className="bg-white/[0.03] border border-white/[0.04] rounded-xl p-3 text-center">
+                <p className="text-lg font-bold text-neon-blue">{Math.floor((selectedUser.xp || 0) / 100) + 1}</p>
+                <p className="text-[9px] text-gray-500 uppercase tracking-wider mt-0.5">Level</p>
+              </div>
+              <div className="bg-white/[0.03] border border-white/[0.04] rounded-xl p-3 text-center">
+                <p className="text-lg font-bold text-orange-400">{selectedUser.longest_streak}</p>
+                <p className="text-[9px] text-gray-500 uppercase tracking-wider mt-0.5">Streak</p>
+              </div>
+            </div>
+
+            {user && selectedUser.id !== user.id && (
+              <div className="mt-5">
+                {friendIds.has(selectedUser.id) ? (
+                  <span className="flex items-center justify-center gap-1.5 w-full py-2.5 text-sm font-bold text-neon-green bg-neon-green/10 border border-neon-green/20 rounded-xl">
+                    <Check size={16} /> Already Friends
+                  </span>
+                ) : (
+                  <Button
+                    onClick={() => handleAddFriend(selectedUser)}
+                    disabled={addingFriendId === selectedUser.id}
+                    variant="primary"
+                    fullWidth
+                  >
+                    {addingFriendId === selectedUser.id ? <Loader size={16} className="animate-spin" /> : <UserPlus size={16} />} Add Friend
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

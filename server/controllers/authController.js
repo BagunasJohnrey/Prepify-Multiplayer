@@ -20,6 +20,8 @@ const safeUser = (u) => ({
   username: u.username,
   email: u.email,
   avatar_url: u.avatar_url,
+  bio: u.bio || '',
+  interested_topics: u.interested_topics || [],
   hearts: u.hearts,
   xp: u.xp || 0,
   last_heart_update: u.last_heart_update,
@@ -341,10 +343,12 @@ export const getMe = async (req, res) => {
 
 export const updateProfile = async (req, res) => {
   try {
-    const { username, email } = req.body;
+    const { username, email, bio, interested_topics } = req.body;
     const fields = {};
     if (username) fields.username = username;
     if (email) fields.email = email;
+    if (bio !== undefined) fields.bio = bio;
+    if (interested_topics !== undefined) fields.interested_topics = interested_topics;
 
     if (Object.keys(fields).length === 0) {
       return res.status(400).json({ error: "No fields to update" });

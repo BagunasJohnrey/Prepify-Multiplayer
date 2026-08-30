@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Award, Heart, Star, ArrowLeft, Save, Check, Camera, Loader, LogOut, Shield, Zap, KeyRound } from 'lucide-react';
+import { User, Award, Heart, Star, ArrowLeft, Save, Check, Camera, Loader, LogOut, Shield, Zap, KeyRound, Plus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { toastOnce } from '../utils/toast';
 import api from '../utils/api';
@@ -20,7 +20,10 @@ export default function Profile() {
   const [formData, setFormData] = useState({
     username: user?.username || '',
     email: user?.email || '',
+    bio: user?.bio || '',
+    interested_topics: user?.interested_topics || [],
   });
+  const [topicInput, setTopicInput] = useState('');
   const [pwData, setPwData] = useState({ currentPassword: '', newPassword: '', confirm: '' });
   const [changingPw, setChangingPw] = useState(false);
 
@@ -70,6 +73,22 @@ export default function Profile() {
     } finally {
       setChangingPw(false);
     }
+  };
+
+  const addTopic = (e) => {
+    e.preventDefault();
+    const t = topicInput.trim();
+    if (!t) return;
+    if (formData.interested_topics.includes(t)) { setTopicInput(''); return; }
+    if (formData.interested_topics.length >= 10) {
+      return toastOnce.error("Maximum 10 topics.");
+    }
+    setFormData({ ...formData, interested_topics: [...formData.interested_topics, t] });
+    setTopicInput('');
+  };
+
+  const removeTopic = (t) => {
+    setFormData({ ...formData, interested_topics: formData.interested_topics.filter(x => x !== t) });
   };
 
   const handleAvatarClick = () => fileInputRef.current?.click();
@@ -139,6 +158,17 @@ export default function Profile() {
               <div>
                 <h2 className="text-xl font-bold text-white">{user.username}</h2>
                 <p className="text-gray-400 text-sm">{user.email || "No email set"}</p>
+                {user.bio && <p className="text-gray-500 text-xs mt-1.5 line-clamp-2">{user.bio}</p>}
+                {user.interested_topics?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {user.interested_topics.slice(0, 4).map(t => (
+                      <span key={t} className="text-[10px] font-semibold bg-neon-purple/10 border border-neon-purple/20 text-neon-purple px-2 py-0.5 rounded">{t}</span>
+                    ))}
+                    {user.interested_topics.length > 4 && (
+                      <span className="text-[10px] text-gray-500 px-1 py-0.5">+{user.interested_topics.length - 4}</span>
+                    )}
+                  </div>
+                )}
                 <div className="flex items-center gap-2 mt-2">
                   {user.has_google && (
                     <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20">Google</span>
@@ -202,6 +232,52 @@ export default function Profile() {
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               />
+
+              {/* Bio */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">Bio</label>
+                <textarea
+                  placeholder="Tell us about yourself, your goals, what you're studying..."
+                  value={formData.bio}
+                  maxLength={500}
+                  onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                  className="w-full bg-white/[0.03] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-neon-blue/50 focus:ring-1 focus:ring-neon-blue/20 transition resize-none"
+                  rows={3}
+                />
+                <p className="text-[10px] text-gray-600 mt-1 text-right">{formData.bio.length}/500</p>
+              </div>
+
+              {/* Interested Topics */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">Interested Topics</label>
+                <div className="flex gap-2">
+                  <input
+                    placeholder="e.g. Biology, Algebra, History"
+                    value={topicInput}
+                    maxLength={50}
+                    onChange={(e) => setTopicInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') addTopic(e); }}
+                    className="flex-1 bg-white/[0.03] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-neon-purple/50 focus:ring-1 focus:ring-neon-purple/20 transition"
+                  />
+                  <Button type="button" variant="ghost" size="sm" onClick={addTopic} className="border border-white/[0.08] text-gray-300 hover:text-white">
+                    <Plus size={16} />
+                  </Button>
+                </div>
+                {formData.interested_topics.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {formData.interested_topics.map(t => (
+                      <span key={t} className="inline-flex items-center gap-1.5 bg-neon-purple/10 border border-neon-purple/25 text-neon-purple text-xs font-semibold px-2.5 py-1 rounded-lg">
+                        {t}
+                        <button type="button" onClick={() => removeTopic(t)} className="text-neon-purple/60 hover:text-white transition">
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[10px] text-gray-600 mt-1.5">Press Enter to add. Max 10 topics.</p>
+              </div>
+
               <Button type="submit" isLoading={loading} variant="primary" fullWidth className="h-11">
                 {saved ? <><Check size={18} /> Saved</> : <><Save size={18} /> Save Changes</>}
               </Button>

@@ -326,7 +326,8 @@ export const generateQuiz = async (req, res) => {
     const newQuiz = await Quiz.create(title, course, difficulty, description, JSON.stringify(allQuestions), allQuestions.length, parsedTags);
 
     res.json(newQuiz);
-  } catch {
-    res.status(500).json({ error: "Failed to generate quiz. Please try again." });
+  } catch (err) {
+    console.error('[generate:error]', err.message);
+    res.status(500).json({ error: err.message || "Failed to generate quiz. Please try again." });
   }
 };

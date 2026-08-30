@@ -16,6 +16,18 @@ const groqModels = (process.env.GROQ_MODELS || "openai/gpt-oss-120b,qwen/qwen3.8
 
 let toggle = 0;
 
+const AI_CALL_TIMEOUT_MS = 60000;
+
+const fetchWithTimeout = async (url, options = {}) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), AI_CALL_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 const extractJson = (rawText) => {
   let text = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
   const start = text.indexOf("[");
@@ -40,7 +52,7 @@ const callGemini = async (prompt, model) => {
   if (!GEMINI_KEY) throw new Error("Missing GEMINI_API_KEY");
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`;
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -63,7 +75,7 @@ const callGemini = async (prompt, model) => {
 const callGroq = async (prompt, model) => {
   if (!GROQ_KEY) throw new Error("Missing GROQ_API_KEY");
 
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const res = await fetchWithTimeout("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${GROQ_KEY}`,

@@ -97,6 +97,10 @@ try {
   // Friends list
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS friends INTEGER[] DEFAULT '{}';");
 
+  // Profile extras
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS interested_topics TEXT[] DEFAULT '{}';");
+
   // Index for faster history queries
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_results_user_id ON results(user_id);
@@ -105,7 +109,7 @@ try {
     CREATE INDEX IF NOT EXISTS idx_results_completed_at ON results(completed_at DESC);
   `);
 
-  console.log("Migration complete: added email, avatar_url, google_id, profile_complete, streak, bookmarks, email verification, password reset columns and results table.");
+  console.log("Migration complete: added email, avatar_url, google_id, profile_complete, streak, bookmarks, email verification, password reset, bio, interested topics columns and results table.");
   await pool.end();
   process.exit(0);
 } catch (err) {

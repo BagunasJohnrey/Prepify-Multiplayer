@@ -54,9 +54,11 @@ export const changePasswordSchema = z.object({
 export const updateProfileSchema = z.object({
   body: z.object({
     username: z.string().min(2).max(30).regex(/^[a-zA-Z0-9_-]+$/).optional(),
-    email: emailSchema.optional()
-  }).refine(data => data.username || data.email, {
-    message: "At least one field (username or email) is required"
+    email: emailSchema.optional(),
+    bio: z.string().max(500).optional(),
+    interested_topics: z.array(z.string().trim().min(1).max(50)).max(10).optional()
+  }).refine(data => data.username || data.email || data.bio !== undefined || data.interested_topics !== undefined, {
+    message: "At least one field (username, email, bio or interested topics) is required"
   })
 });
 

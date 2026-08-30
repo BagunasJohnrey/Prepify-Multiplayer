@@ -19,7 +19,7 @@ export default {
 
   async findByUsername(username) {
     const result = await pool.query(
-      "SELECT id, username, email, avatar_url, hearts, xp, last_heart_update, login_streak, longest_streak, bookmarked_quizzes, role, password_hash, google_id, email_verified, profile_complete FROM users WHERE username = $1",
+      "SELECT id, username, email, avatar_url, bio, interested_topics, hearts, xp, last_heart_update, login_streak, longest_streak, bookmarked_quizzes, role, password_hash, google_id, email_verified, profile_complete FROM users WHERE username = $1",
       [username]
     );
     return result.rows[0];
@@ -27,7 +27,7 @@ export default {
 
   async findByGoogleId(googleId) {
     const result = await pool.query(
-      "SELECT id, username, email, avatar_url, hearts, xp, last_heart_update, login_streak, longest_streak, bookmarked_quizzes, role, password_hash, google_id, email_verified, profile_complete FROM users WHERE google_id = $1",
+      "SELECT id, username, email, avatar_url, bio, interested_topics, hearts, xp, last_heart_update, login_streak, longest_streak, bookmarked_quizzes, role, password_hash, google_id, email_verified, profile_complete FROM users WHERE google_id = $1",
       [googleId]
     );
     return result.rows[0];
@@ -35,7 +35,7 @@ export default {
 
   async findByEmail(email) {
     const result = await pool.query(
-      "SELECT id, username, email, avatar_url, hearts, xp, last_heart_update, login_streak, longest_streak, bookmarked_quizzes, role, password_hash, google_id, email_verified, profile_complete FROM users WHERE email = $1",
+      "SELECT id, username, email, avatar_url, bio, interested_topics, hearts, xp, last_heart_update, login_streak, longest_streak, bookmarked_quizzes, role, password_hash, google_id, email_verified, profile_complete FROM users WHERE email = $1",
       [email]
     );
     return result.rows[0];
@@ -55,14 +55,14 @@ export default {
 
   async findById(id) {
     const result = await pool.query(
-      "SELECT id, username, email, avatar_url, hearts, xp, last_heart_update, login_streak, longest_streak, bookmarked_quizzes, role, password_hash, google_id, email_verified, profile_complete FROM users WHERE id = $1",
+      "SELECT id, username, email, avatar_url, bio, interested_topics, hearts, xp, last_heart_update, login_streak, longest_streak, bookmarked_quizzes, role, password_hash, google_id, email_verified, profile_complete FROM users WHERE id = $1",
       [id]
     );
     return result.rows[0];
   },
 
   async updateProfile(id, fields) {
-    const allowed = ["username", "email", "avatar_url"];
+    const allowed = ["username", "email", "avatar_url", "bio", "interested_topics"];
     const updates = [];
     const values = [];
     let idx = 1;
