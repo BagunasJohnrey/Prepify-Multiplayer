@@ -101,7 +101,7 @@ export default function Dashboard() {
     finally { setQuizzesLoading(false); }
   }, [filter, difficultyFilter, tagFilter, search, page]);
 
-  useEffect(() => { if (user) fetchQuizzes(); }, [fetchQuizzes, user]);
+  useEffect(() => { if (user) fetchQuizzes(); }, [fetchQuizzes, user?.id]);
   useEffect(() => { api.get('/tags').then(({ data }) => setAvailableTags(data)).catch(() => {}); }, []);
 
   useEffect(() => {
